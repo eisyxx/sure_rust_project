@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>부루마불 게임</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+
+    <!-- 왼쪽: 보드 -->
+    <div class="board-section">
+
+        <!-- 보드 -->
+        <div class="board" id="board"></div>
+
+        <!-- 플레이어 마커 -->
+        <div class="player-marker player1"></div>
+        <div class="player-marker player2"></div>
+        <div class="player-marker player3"></div>
+        <div class="player-marker player4"></div>
+
+    </div>
+
+    <!-- 오른쪽: UI -->
+    <div class="side-panel">
+
+      <!-- 상단 정보 -->
+      <div class="top-info">
+        <div class="balance">💰 잔액: 100,000</div>
+        <button class="history-btn">계좌 내역 조회</button>
+      </div>
+
+      <!-- 플레이어 목록 -->
+      <div class="player-list">
+        <div class="player active"><span class="p1">player1</span></div>
+        <div class="player"><span class="p2">player2</span></div>
+        <div class="player"><span class="p3">player3</span></div>
+        <div class="player"><span class="p4">player4</span></div>
+      </div>
+
+      <!-- 컨트롤 -->
+      <div class="controls">
+        <button id="rollBtn">주사위 던지기</button>
+        <div class="dice">-</div>
+
+        <div class="action-buttons">
+          <button>토지 구매</button>
+          <button id="confirmBtn">확인</button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</body>
+<script src="./screen/map.js"></script>
+</html>
