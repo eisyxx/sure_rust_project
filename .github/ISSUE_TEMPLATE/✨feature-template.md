@@ -1,3 +1,11 @@
+---
+name: "✨Feature Template"
+about: 새로운 기능 개발
+title: ''
+labels: ''
+assignees: ''
+
+---
 
 ## ☑️ 체크리스트
 - [ ] 협업 루틴: 이슈 생성 -> 브랜치 생성 -> 개발 -> commit&push -> pull request 작성 -> 팀원 리뷰 -> main 브랜치에 머지 -> 이슈 닫기
