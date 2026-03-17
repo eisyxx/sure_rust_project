@@ -1,3 +1,11 @@
+---
+name: "\U0001F41B Bug Report"
+about: 버그 제보
+title: ''
+labels: ''
+assignees: ''
+
+---
 
 ## 🐞 Bug Description  
 버그에 대한 간단한 설명을 작성합니다.
