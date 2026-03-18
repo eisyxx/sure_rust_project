@@ -25,8 +25,9 @@ pub fn init_db(conn: &Connection) -> Result<()> {
             position INTEGER,
             money INTEGER,
             lap INTEGER,
-            turn_order INTEGER,
-            is_bankrupt INTEGER
+            turn_order INTEGER, # 플레이어 순서 (1~4)
+            is_bankrupt INTEGER,
+            current_turn INTEGER DEFAULT 0 # 현재 턴 플레이어 표시 (0: 아님, 1: 현재 턴)
         )",
         [],
     )?;
