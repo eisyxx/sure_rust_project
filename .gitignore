@@ -1,0 +1,3 @@
+target/
+*.db
+rustc_info.json
