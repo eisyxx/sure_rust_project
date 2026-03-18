@@ -16,6 +16,7 @@ body {
   justify-content: center;
   align-items: center;
   background: #ddd;
+  position: relative;
 }
 
 /* 보드 */
@@ -52,21 +53,33 @@ body {
   background: #eee;
 }
 
+/* 로고 */
+.game-logo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 300px;   /* 크기 조절 */
+  height: auto;
+  z-index: 5;     /* 타일 위에 보이게 */
+}
+
 /* 플레이어 마커 */
 .player-marker {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
+  width: 40px;   /* 이미지 크기에 맞춰 조절 */
+  height: 40px;
   position: absolute;
   transform: translate(-50%, -50%);
   z-index: 10;
+  background-size: cover;   /* 이미지 꽉 채우기 */
+  background-position: center;
 }
 
-/* 색상 + 초기 위치 (임시) */
-.player1 { background: red; }
-.player2 { background: green; }
-.player3 { background: blue; }
-.player4 { background: orange; }
+/* 플레이어별 이미지 */
+.player1 { background-image: url('assets/player1_marker.png'); }
+.player2 { background-image: url('assets/player2_marker.png'); }
+.player3 { background-image: url('assets/player3_marker.png'); }
+.player4 { background-image: url('assets/player4_marker.png'); }
 
 /* 오른쪽 UI */
 .side-panel {
@@ -90,27 +103,31 @@ body {
 .player-list {
   margin-top: 40px;
   text-align: center;
+  display: flex;           /* 세로로 나열 */
+  flex-direction: column;  /* 플레이어 항목을 위->아래로 */
+  gap: 8px;                /* 항목 사이 간격 */
 }
 
+/* 각 플레이어 항목 */
 .player {
-  margin: 15px 0;
-  font-size: 18px;
+  margin: 0;               /* flex-gap으로 간격 조정 */
+  font-size: 32px;
   display: flex;        
-  justify-content: center;
+  justify-content: center;  /* 아이콘 + 텍스트 중앙 정렬 */
   align-items: center;
-  gap: 8px;
+  gap: 6px;                /* 아이콘과 텍스트 사이 간격 */
+}
+
+/* 플레이어 아이콘 */
+.player-icon {
+  width: 90px;   /* 아이콘 크기 */
+  height: 100px;
 }
 
 /* 현재 턴 */
 .player.active::before {
   content: "👉 ";
 }
-
-/* 색상 */
-.p1 { color: red; }
-.p2 { color: green; }
-.p3 { color: blue; }
-.p4 { color: orange; }
 
 /* 컨트롤 */
 .controls {
