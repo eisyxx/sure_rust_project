@@ -189,19 +189,19 @@ function getTileType() {
 function handleTileEvent(playerIndex) {
   const type = getTileType();
 
-  resetActionButtons(); // ⭐ 먼저 초기화
+  resetActionButtons(); // 먼저 초기화
 
   if (type === "buy") {
     alert("구매가 가능한 토지입니다.");
 
-    // ⭐ 구매 버튼 표시
+    // 구매 버튼 표시
     document.getElementById("buyBtn").style.display = "inline-block";
 
   } else if (type === "toll") {
     const fee = 2000;
     alert(`통행료 ${fee}원을 지불해야 합니다.`);
 
-    // ⭐ 통행료 버튼 표시
+    // 통행료 버튼 표시
     document.getElementById("payBtn").style.display = "inline-block";
 
   } else {
@@ -210,7 +210,7 @@ function handleTileEvent(playerIndex) {
 }
 
 
-// ⭐ 모든 버튼 숨기기
+// 모든 버튼 숨기기
 function resetActionButtons() {
   document.getElementById("buyBtn").style.display = "none";
   document.getElementById("payBtn").style.display = "none";
@@ -244,4 +244,46 @@ if (payBtn) {
 
     resetActionButtons(); // 행동 끝나면 버튼 숨김
   };
+}
+
+
+const accountBtn = document.getElementById("accountBtn");
+const modal = document.getElementById("accountModal");
+const closeModal = document.getElementById("closeModal");
+
+accountBtn.onclick = () => {
+  modal.classList.remove("hidden");
+
+  loadDummyTransactions(); // 데이터 채우기
+};
+
+closeModal.onclick = () => {
+  modal.classList.add("hidden");
+};
+
+function loadDummyTransactions() {
+  const tbody = document.getElementById("transactionBody");
+
+  // 기존 내용 초기화
+  tbody.innerHTML = "";
+
+  const dummyData = [
+    { id: 1, type: "입금", amount: 10000, time: "12:01", target: "시작 보너스" },
+    { id: 2, type: "출금", amount: 2000, time: "12:05", target: "통행료" },
+    { id: 3, type: "출금", amount: 3000, time: "12:10", target: "토지 구매" },
+  ];
+
+  dummyData.forEach(tx => {
+    const row = document.createElement("tr");
+
+    row.innerHTML = `
+      <td>${tx.id}</td>
+      <td>${tx.type}</td>
+      <td>${tx.amount}</td>
+      <td>${tx.time}</td>
+      <td>${tx.target}</td>
+    `;
+
+    tbody.appendChild(row);
+  });
 }

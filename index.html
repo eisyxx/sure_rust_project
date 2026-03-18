@@ -28,8 +28,8 @@
 
       <!-- 상단 정보 -->
       <div class="top-info">
-        <div class="balance">💰 잔액: 100,000</div>
-        <button class="history-btn">계좌 내역 조회</button>
+        <div id="balance">💰 잔액: 100,000</div>
+        <button id="accountBtn" class="history-btn">계좌 내역 조회</button>
       </div>
 
       <!-- 플레이어 목록 -->
@@ -67,6 +67,33 @@
     </div>
 
   </div>
+
+  <!-- 계좌 조회 팝업 -->
+  <div id="accountModal" class="modal hidden">
+
+    <div class="modal-content">
+      <h2>계좌 거래 내역</h2>
+
+      <table class="transaction-table">
+        <thead>
+          <tr>
+            <th>거래 ID</th>
+            <th>유형</th>
+            <th>금액</th>
+            <th>시간</th>
+            <th>거래처</th>
+          </tr>
+        </thead>
+        <tbody id="transactionBody">
+          <!-- JS로 채움 -->
+        </tbody>
+      </table>
+
+      <button id="closeModal">닫기</button>
+    </div>
+
+  </div>
+
 </body>
 <script src="./map.js"></script>
 </html>
