@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>부루마불 게임</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+
+    <!-- 왼쪽: 보드 -->
+    <div class="board-section">
+
+        <!-- 보드 -->
+        <div class="board" id="board"></div>
+        <img class="game-logo" src="assets/game_logo.png" alt="Game Logo">
+
+        <!-- 플레이어 마커 -->
+        <div class="player-marker player1"></div>
+        <div class="player-marker player2"></div>
+        <div class="player-marker player3"></div>
+        <div class="player-marker player4"></div>
+
+    </div>
+
+    <!-- 오른쪽: UI -->
+    <div class="side-panel">
+
+      <!-- 상단 정보 -->
+      <div class="top-info">
+        <div id="balance">💰 잔액: 100,000</div>
+        <button id="accountBtn" class="history-btn">계좌 내역 조회</button>
+      </div>
+
+      <!-- 플레이어 목록 -->
+      <div class="player-list">
+        <div class="player active">
+          <img class="player-icon" src="assets/player1_icon.png" alt="Player 1 Icon">
+          <span class="p1">player1</span>
+        </div>
+        <div class="player">
+          <img class="player-icon" src="assets/player2_icon.png" alt="Player 2 Icon">
+          <span class="p2">player2</span>
+        </div>
+        <div class="player">
+          <img class="player-icon" src="assets/player3_icon.png" alt="Player 3 Icon">
+          <span class="p3">player3</span>
+        </div>
+        <div class="player">
+          <img class="player-icon" src="assets/player4_icon.png" alt="Player 4 Icon">
+          <span class="p4">player4</span>
+        </div>
+      </div>
+
+      <!-- 컨트롤 -->
+      <div class="controls">
+        <button id="rollBtn">주사위 던지기</button>
+        <div class="dice">-</div>
+
+        <div class="action-buttons">
+          <button id="buyBtn" style="display:none;">토지 구매</button>
+          <button id="payBtn" style="display:none;">통행료 지불</button>
+          <button id="confirmBtn">확인</button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- 계좌 조회 팝업 -->
+  <div id="accountModal" class="modal hidden">
+
+    <div class="modal-content">
+      <h2>계좌 거래 내역</h2>
+
+      <table class="transaction-table">
+        <thead>
+          <tr>
+            <th>거래 ID</th>
+            <th>유형</th>
+            <th>금액</th>
+            <th>시간</th>
+            <th>거래처</th>
+          </tr>
+        </thead>
+        <tbody id="transactionBody">
+          <!-- JS로 채움 -->
+        </tbody>
+      </table>
+
+      <button id="closeModal">닫기</button>
+    </div>
+
+  </div>
+
+</body>
+<script src="./map.js"></script>
+</html>
