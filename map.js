@@ -90,6 +90,8 @@ async function animateMove(playerIndex, steps) {
   }
 
   isAnimating = false;
+
+  handleTileEvent(playerIndex); // 이동 완료 후 땅 상태 확인
 }
 
 // 한 칸에 여러 명이 있을 때 마커 위치 조정
@@ -155,6 +157,8 @@ if (confirmBtn) {
   confirmBtn.onclick = async () => {
     if (!rolled || isAnimating) return;
 
+    resetActionButtons(); // 턴 넘기기 전에 버튼 초기화
+
     currentPlayer = (currentPlayer + 1) % players.length;
 
     rolled = false;
@@ -172,3 +176,72 @@ function initGame() {
 }
 
 initGame();
+
+
+// 땅 상태 (임시 랜덤)
+function getTileType() {
+  const types = ["buy", "toll", "event"];
+  return types[Math.floor(Math.random() * types.length)];
+}
+
+
+// 땅 도착 시 처리
+function handleTileEvent(playerIndex) {
+  const type = getTileType();
+
+  resetActionButtons(); // ⭐ 먼저 초기화
+
+  if (type === "buy") {
+    alert("구매가 가능한 토지입니다.");
+
+    // ⭐ 구매 버튼 표시
+    document.getElementById("buyBtn").style.display = "inline-block";
+
+  } else if (type === "toll") {
+    const fee = 2000;
+    alert(`통행료 ${fee}원을 지불해야 합니다.`);
+
+    // ⭐ 통행료 버튼 표시
+    document.getElementById("payBtn").style.display = "inline-block";
+
+  } else {
+    alert("이벤트 칸입니다!");
+  }
+}
+
+
+// ⭐ 모든 버튼 숨기기
+function resetActionButtons() {
+  document.getElementById("buyBtn").style.display = "none";
+  document.getElementById("payBtn").style.display = "none";
+}
+
+// 구매 버튼
+const buyBtn = document.getElementById("buyBtn");
+
+if (buyBtn) {
+  buyBtn.onclick = () => {
+    const result = confirm("구매하시겠습니까?");
+
+    if (result) {
+      alert("구매 완료!");
+      // TODO: Rust에 구매 요청 보내기
+    } else {
+      console.log("구매 취소");
+    }
+    
+  };
+}
+
+// 통행료 버튼
+const payBtn = document.getElementById("payBtn");
+
+if (payBtn) {
+  payBtn.onclick = () => {
+    const fee = 2000; // 임시값
+    alert(`${fee}원이 출금되었습니다.`);
+    // TODO: Rust에 지불 요청
+
+    resetActionButtons(); // 행동 끝나면 버튼 숨김
+  };
+}
