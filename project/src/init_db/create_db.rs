@@ -39,7 +39,8 @@ pub fn init_db(conn: &Connection) -> Result<()> {
             id INTEGER PRIMARY KEY,
             name TEXT,
             type TEXT,
-            price INTEGER
+            price INTEGER,
+            toll INTEGER
         )",
         [],
     )?;
