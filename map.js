@@ -48,6 +48,7 @@ const players = [
 let currentPlayer = 0;
 let isAnimating = false;
 let turnInProgress = false; // 이번 턴 진행 중 여부 (확인 버튼 제어용)
+const cellSlotMap = new Map();
 
 
 // DOM
@@ -58,7 +59,91 @@ const balanceEl = document.getElementById("balance");
 
 document
   .querySelectorAll(".player-marker")
-  .forEach(marker => marker.classList.add("pending-placement"));
+  .forEach(marker => {
+    marker.classList.add("pending-placement");
+    const markerIdClass = Array.from(marker.classList).find(className =>
+      /^player\d+$/.test(className)
+    );
+    if (markerIdClass) {
+      marker.dataset.markerId = markerIdClass;
+    }
+  });
+
+function getCellKey(row, col) {
+  return `${row},${col}`;
+}
+
+function getOrCreateSlots(row, col) {
+  const key = getCellKey(row, col);
+
+  if (!cellSlotMap.has(key)) {
+    cellSlotMap.set(key, [null, null, null, null]);
+  }
+
+  return cellSlotMap.get(key);
+}
+
+function releaseMarkerSlot(cell, markerId) {
+  if (!cell?.classList?.contains("tile")) return;
+  if (!markerId) return;
+
+  const row = Number(cell.dataset.row);
+  const col = Number(cell.dataset.col);
+  const key = getCellKey(row, col);
+  const slots = cellSlotMap.get(key);
+
+  if (!slots) return;
+
+  const slotIndex = slots.findIndex(slotMarkerId => slotMarkerId === markerId);
+
+  if (slotIndex !== -1) {
+    slots[slotIndex] = null;
+  }
+
+  if (slots.every(slotMarkerId => slotMarkerId === null)) {
+    cellSlotMap.delete(key);
+  }
+}
+
+function reserveMarkerSlot(row, col, markerId) {
+  const slots = getOrCreateSlots(row, col);
+
+  const existingSlotIndex = slots.findIndex(
+    slotMarkerId => slotMarkerId === markerId
+  );
+
+  if (existingSlotIndex !== -1) {
+    return existingSlotIndex;
+  }
+
+  const emptySlotIndex = slots.findIndex(slotMarkerId => slotMarkerId === null);
+
+  if (emptySlotIndex !== -1) {
+    slots[emptySlotIndex] = markerId;
+    return emptySlotIndex;
+  }
+
+  return 0;
+}
+
+function placeMarkerInSlot(marker, row, col) {
+  const markerId = marker.dataset.markerId;
+  if (!markerId) return;
+
+  const positions = [
+    { x: -15, y: -15 },
+    { x: 15, y: -15 },
+    { x: -15, y: 15 },
+    { x: 15, y: 15 },
+  ];
+
+  const slotIndex = reserveMarkerSlot(row, col, markerId);
+  const pos = positions[slotIndex] ?? positions[0];
+
+  marker.style.left = "50%";
+  marker.style.top = "50%";
+  marker.style.transform = `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px)`;
+}
 
 
 // 이동 함수
@@ -75,9 +160,16 @@ function movePlayer(playerIndex) {
   );
 
   if (cell) {
+    const markerId = marker.dataset.markerId;
+    const previousCell = marker.parentElement;
+
+    if (previousCell && previousCell !== cell) {
+      releaseMarkerSlot(previousCell, markerId);
+    }
+
     cell.appendChild(marker);
     marker.classList.remove("pending-placement");
-    arrangeMarkersInCell(row, col);
+    placeMarkerInSlot(marker, row, col);
   }
 }
 
@@ -98,33 +190,6 @@ async function animateMove(playerIndex, steps) {
 
   isAnimating = false;
 }
-
-// 한 칸에 여러 명이 있을 때 마커 위치 조정
-function arrangeMarkersInCell(row, col) {
-  const cell = document.querySelector(
-    `.tile[data-row="${row}"][data-col="${col}"]`
-  );
-
-  if (!cell) return;
-
-  const markers = cell.querySelectorAll(".player-marker");
-
-  const positions = [
-    { x: -15, y: -15 },    // 좌상
-    { x: 15, y: -15 },   // 우상
-    { x: -15, y: 15 },   // 좌하
-    { x: 15, y: 15 },  // 우하
-  ];
-
-  markers.forEach((marker, idx) => {
-    const pos = positions[idx % positions.length];
-
-    marker.style.left = "50%";
-    marker.style.top = "50%";
-    marker.style.transform = `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px)`;
-  });
-}
-
 
 // 콘솔용 턴 표시
 function updateTurnUI() {
