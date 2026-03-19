@@ -46,9 +46,8 @@ const players = [
 ];
 
 let currentPlayer = 0;
-let diceValue = 0;
-let rolled = false;
 let isAnimating = false;
+let turnInProgress = false; // 이번 턴 진행 중 여부 (확인 버튼 제어용)
 
 
 // DOM
@@ -90,8 +89,6 @@ async function animateMove(playerIndex, steps) {
   }
 
   isAnimating = false;
-
-  handleTileEvent(playerIndex); // 이동 완료 후 땅 상태 확인
 }
 
 // 한 칸에 여러 명이 있을 때 마커 위치 조정
@@ -137,17 +134,61 @@ function updateTurnUI() {
 }
 
 
-// 주사위
+// 주사위 (백 연결 필요)
 if (rollBtn) {
   rollBtn.onclick = async () => {
-    if (rolled || isAnimating) return;
+    // 애니메이션 중이거나 턴 진행 중이면 막기
+    if (isAnimating || turnInProgress) return;
 
-    diceValue = Math.floor(Math.random() * 6) + 1;
-    diceEl.textContent = diceValue;
+    try {
+      const res = await fetch("/api/play-turn", {
+        method: "POST",
+      });
 
-    rolled = true;
+      const data = await res.json();
 
-    await animateMove(currentPlayer, diceValue);
+      const {
+        player_id,
+        dice,
+        old_position,
+        new_position,
+        passed_start,
+        game_end,
+        tile_type // 앞으로 백에서 줄 예정
+      } = data;
+
+      diceEl.textContent = dice;
+
+      const playerIndex = players.findIndex(p => p.id === player_id);
+
+      // 이동 step 계산
+      const steps =
+        (new_position - old_position + path.length) % path.length;
+
+      await animateMove(playerIndex, steps);
+
+      // 위치 동기화
+      players[playerIndex].pos = new_position;
+
+      // 월급 로그 (백에서 처리됨)
+      if (passed_start) {
+        console.log(`💰 Player ${player_id} salary +20`);
+      }
+
+      // 게임 종료
+      if (game_end) {
+        alert(`Player ${player_id} wins!`);
+        return;
+      }
+
+      // 행동 단계 진입
+      handleTileEvent(playerIndex, tile_type);
+
+      turnInProgress = true; // 확인 버튼 활성 상태
+
+    } catch (err) {
+      console.error(err);
+    }
   };
 }
 
@@ -155,13 +196,14 @@ if (rollBtn) {
 // 확인버튼: 턴 넘기기
 if (confirmBtn) {
   confirmBtn.onclick = async () => {
-    if (!rolled || isAnimating) return;
+    if (!turnInProgress || isAnimating) return;
 
-    resetActionButtons(); // 턴 넘기기 전에 버튼 초기화
+    resetActionButtons();
 
+    // 턴 넘기기 (현재는 프론트에서 처리, 나중에 백으로 넘겨도 됨)
     currentPlayer = (currentPlayer + 1) % players.length;
 
-    rolled = false;
+    turnInProgress = false;
     diceEl.textContent = "-";
 
     updateTurnUI();
@@ -178,16 +220,8 @@ function initGame() {
 initGame();
 
 
-// 땅 상태 (임시 랜덤)
-function getTileType() {
-  const types = ["buy", "toll", "event"];
-  return types[Math.floor(Math.random() * types.length)];
-}
-
-
 // 땅 도착 시 처리
 function handleTileEvent(playerIndex) {
-  const type = getTileType();
 
   resetActionButtons(); // 먼저 초기화
 
