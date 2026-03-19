@@ -3,8 +3,24 @@ use serde::Serialize;
 use std::sync::Mutex;
 use rusqlite::Connection;
 
-use crate::dto::TurnResponse;
-use crate::service::{play_turn_api, next_turn, get_game_state};
+use crate::service::{play_turn_api, next_turn, get_game_state, reset_game};
+
+
+// 🔁 게임 초기화
+#[post("/api/reset-game")]
+pub async fn reset_game_handler(
+    db: web::Data<Mutex<Connection>>,
+) -> impl Responder {
+    let conn = db.lock().unwrap();
+
+    match reset_game(&conn, 1).and_then(|_| get_game_state(&conn, 1)) {
+        Ok(state) => HttpResponse::Ok().json(state),
+        Err(e) => {
+            println!("❌ reset_game error: {:?}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
 
 
 // 🎮 게임 상태 조회

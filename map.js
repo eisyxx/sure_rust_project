@@ -55,11 +55,17 @@ const diceEl = document.querySelector(".dice");
 const rollBtn = document.getElementById("rollBtn");
 const confirmBtn = document.getElementById("confirmBtn");
 
+document
+  .querySelectorAll(".player-marker")
+  .forEach(marker => marker.classList.add("pending-placement"));
+
 
 // 이동 함수
 function movePlayer(playerIndex) {
   const player = players[playerIndex];
   const marker = document.querySelector(`.player${player.id}`);
+
+  if (!marker) return;
 
   const [row, col] = path[player.pos];
 
@@ -69,6 +75,7 @@ function movePlayer(playerIndex) {
 
   if (cell) {
     cell.appendChild(marker);
+    marker.classList.remove("pending-placement");
     arrangeMarkersInCell(row, col);
   }
 }
@@ -242,14 +249,21 @@ if (confirmBtn) {
 async function initGame() {
   try {
     const BASE_URL = "http://localhost:8080";
-    
-    // 백엔드에서 게임 상태 가져오기
-    const res = await fetch(`${BASE_URL}/api/game-state`);
+
+    const res = await fetch(`${BASE_URL}/api/reset-game`, {
+      method: "POST",
+    });
+
     if (!res.ok) {
-      throw new Error(`Failed to load game state: ${res.status}`);
+      throw new Error(`Failed to reset game: ${res.status}`);
     }
-    
+
     const state = await res.json();
+
+    turnInProgress = false;
+    isAnimating = false;
+    diceEl.textContent = "-";
+    resetActionButtons();
     
     // 프론트엔드 상태 동기화
     state.players.forEach(p => {

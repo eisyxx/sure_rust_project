@@ -1,6 +1,44 @@
 use rand::Rng;
 use rusqlite::{Connection, Result};
 use crate::dto::{TurnResponse, GameState, PlayerState};
+use crate::init_db::create_db::init_db;
+use crate::init_db::init_player::create_player;
+use crate::init_db::init_tiles::init_tiles;
+
+pub fn reset_game(conn: &Connection, game_id: i32) -> Result<()> {
+    init_db(conn)?;
+
+    conn.execute("DELETE FROM transactions", [])?;
+    conn.execute("DELETE FROM properties", [])?;
+    conn.execute("DELETE FROM event_tiles", [])?;
+    conn.execute("DELETE FROM fund", [])?;
+    conn.execute("DELETE FROM players", [])?;
+    conn.execute("DELETE FROM games", [])?;
+    conn.execute("DELETE FROM tiles", [])?;
+
+    conn.execute(
+        "INSERT INTO games(current_turn, status)
+         VALUES (?1, 'playing')",
+        (1,),
+    )?;
+
+    init_tiles(conn)?;
+
+    create_player(conn, game_id, "Player1", 1)?;
+    create_player(conn, game_id, "Player2", 2)?;
+    create_player(conn, game_id, "Player3", 3)?;
+    create_player(conn, game_id, "Player4", 4)?;
+
+    conn.execute("UPDATE players SET current_turn = 0", [])?;
+    conn.execute(
+        "UPDATE players
+         SET current_turn = 1
+         WHERE game_id = ?1 AND turn_order = 1",
+        (game_id,),
+    )?;
+
+    Ok(())
+}
 
 // 게임 상태 조회
 pub fn get_game_state(conn: &Connection, game_id: i32) -> Result<GameState> {
