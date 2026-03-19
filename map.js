@@ -120,8 +120,6 @@ function arrangeMarkersInCell(row, col) {
 
 // 콘솔용 턴 표시
 function updateTurnUI() {
-  console.log(`현재 턴: Player ${players[currentPlayer].id}`);
-
   const playerEls = document.querySelectorAll(".player");
 
   playerEls.forEach((el, idx) => {
@@ -136,14 +134,22 @@ function updateTurnUI() {
 
 // 주사위 (백 연결 필요)
 if (rollBtn) {
-  rollBtn.onclick = async () => {
+  rollBtn.addEventListener("click", async (event) => {
+    event.preventDefault();
+    
     // 애니메이션 중이거나 턴 진행 중이면 막기
     if (isAnimating || turnInProgress) return;
 
     try {
-      const res = await fetch("/api/play-turn", {
+      const BASE_URL = "http://localhost:8080";
+
+      const res = await fetch(`${BASE_URL}/api/play-turn`, {
         method: "POST",
       });
+
+      if (!res.ok) {
+        throw new Error(`Backend error: ${res.status}`);
+      }
 
       const data = await res.json();
 
@@ -156,6 +162,8 @@ if (rollBtn) {
         game_end,
         tile_type // 앞으로 백에서 줄 예정
       } = data;
+
+      console.log("🎲 Dice result:", data);
 
       diceEl.textContent = dice;
 
@@ -181,67 +189,92 @@ if (rollBtn) {
         return;
       }
 
-      // 행동 단계 진입
-      handleTileEvent(playerIndex, tile_type);
-
       turnInProgress = true; // 확인 버튼 활성 상태
 
     } catch (err) {
-      console.error(err);
+      console.error("❌ Roll dice error:", err);
+      alert("주사위 던지기 실패: " + err.message);
     }
-  };
+  });
 }
 
 
 // 확인버튼: 턴 넘기기
 if (confirmBtn) {
-  confirmBtn.onclick = async () => {
+  confirmBtn.addEventListener("click", async (event) => {
+    event.preventDefault();
+    
     if (!turnInProgress || isAnimating) return;
 
-    resetActionButtons();
+    try {
+      resetActionButtons();
 
-    // 턴 넘기기 (현재는 프론트에서 처리, 나중에 백으로 넘겨도 됨)
-    currentPlayer = (currentPlayer + 1) % players.length;
+      const BASE_URL = "http://localhost:8080";
 
-    turnInProgress = false;
-    diceEl.textContent = "-";
+      const res = await fetch(`${BASE_URL}/api/next-turn`, {
+        method: "POST",
+      });
 
-    updateTurnUI();
-  };
+      if (!res.ok) {
+        throw new Error(`Backend error: ${res.status}`);
+      }
+
+      await res.json();
+
+      turnInProgress = false;
+      diceEl.textContent = "-";
+
+      // 👉 백 기준으로 다시 가져오는게 베스트지만
+      currentPlayer = (currentPlayer + 1) % players.length;
+
+      updateTurnUI();
+    } catch (err) {
+      console.error("❌ Next turn error:", err);
+      alert("턴 넘기기 실패: " + err.message);
+    }
+  });
+} else {
+  console.error("❌ confirmBtn not found!");
 }
 
 
 // 초기화
-function initGame() {
-  players.forEach((_, idx) => movePlayer(idx));
-  updateTurnUI();
+async function initGame() {
+  try {
+    const BASE_URL = "http://localhost:8080";
+    
+    // 백엔드에서 게임 상태 가져오기
+    const res = await fetch(`${BASE_URL}/api/game-state`);
+    if (!res.ok) {
+      throw new Error(`Failed to load game state: ${res.status}`);
+    }
+    
+    const state = await res.json();
+    
+    // 프론트엔드 상태 동기화
+    state.players.forEach(p => {
+      const idx = players.findIndex(fp => fp.id === p.id);
+      if (idx !== -1) {
+        players[idx].pos = p.position;
+      }
+    });
+    
+    // 현재 플레이어 설정
+    currentPlayer = players.findIndex(p => p.id === state.current_player_id);
+    
+    // 마커 위치 설정
+    players.forEach((_, idx) => movePlayer(idx));
+    updateTurnUI();
+    
+  } catch (err) {
+    console.error("❌ Failed to init game:", err);
+    // 폴백: 기본 초기화
+    players.forEach((_, idx) => movePlayer(idx));
+    updateTurnUI();
+  }
 }
 
 initGame();
-
-
-// 땅 도착 시 처리
-function handleTileEvent(playerIndex) {
-
-  resetActionButtons(); // 먼저 초기화
-
-  if (type === "buy") {
-    alert("구매가 가능한 토지입니다.");
-
-    // 구매 버튼 표시
-    document.getElementById("buyBtn").style.display = "inline-block";
-
-  } else if (type === "toll") {
-    const fee = 2000;
-    alert(`통행료 ${fee}원을 지불해야 합니다.`);
-
-    // 통행료 버튼 표시
-    document.getElementById("payBtn").style.display = "inline-block";
-
-  } else {
-    alert("이벤트 칸입니다!");
-  }
-}
 
 
 // 모든 버튼 숨기기

@@ -1,6 +1,40 @@
 use rand::Rng;
 use rusqlite::{Connection, Result};
-use crate::dto::TurnResponse;
+use crate::dto::{TurnResponse, GameState, PlayerState};
+
+// 게임 상태 조회
+pub fn get_game_state(conn: &Connection, game_id: i32) -> Result<GameState> {
+    // 모든 플레이어 정보 조회
+    let mut stmt = conn.prepare(
+        "SELECT id, name, position, lap, money, turn_order FROM players
+         WHERE game_id = ?1
+         ORDER BY turn_order ASC"
+    )?;
+
+    let players = stmt.query_map((game_id,), |row| {
+        Ok(PlayerState {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            position: row.get(2)?,
+            lap: row.get(3)?,
+            money: row.get(4)?,
+            turn_order: row.get(5)?,
+        })
+    })?
+    .collect::<Result<Vec<_>, _>>()?;
+
+    // 현재 턴 플레이어 ID
+    let current_player_id: i64 = conn.query_row(
+        "SELECT id FROM players WHERE game_id = ?1 AND current_turn = 1",
+        (game_id,),
+        |row| row.get(0),
+    )?;
+
+    Ok(GameState {
+        players,
+        current_player_id,
+    })
+}
 
 // API용
 pub fn play_turn_api(conn: &Connection, game_id: i32) -> Result<TurnResponse> {
@@ -182,6 +216,7 @@ fn check_game_end(conn: &Connection, player_id: i64) -> Result<bool> {
         |row| row.get(0),
     )?;
 
+    // 3바퀴 완주하면 게임 종료
     Ok(lap >= 3)
 }
 

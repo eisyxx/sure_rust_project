@@ -1,11 +1,27 @@
-use actix_web::{post, web, HttpResponse, Responder};
+use actix_web::{post, get, web, HttpResponse, Responder};
 use serde::Serialize;
 use std::sync::Mutex;
 use rusqlite::Connection;
 
 use crate::dto::TurnResponse;
-use crate::service::{play_turn_api, next_turn};
+use crate::service::{play_turn_api, next_turn, get_game_state};
 
+
+// 🎮 게임 상태 조회
+#[get("/api/game-state")]
+pub async fn game_state_handler(
+    db: web::Data<Mutex<Connection>>,
+) -> impl Responder {
+    let conn = db.lock().unwrap();
+
+    match get_game_state(&conn, 1) {
+        Ok(state) => HttpResponse::Ok().json(state),
+        Err(e) => {
+            println!("❌ game_state error: {:?}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
 
 // 🎲 play-turn API
 #[post("/api/play-turn")]

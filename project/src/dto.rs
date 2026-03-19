@@ -9,3 +9,19 @@ pub struct TurnResponse {
     pub passed_start: bool,
     pub game_end: bool,
 }
+
+#[derive(Serialize)]
+pub struct PlayerState {
+    pub id: i64,
+    pub name: String,
+    pub position: i32,
+    pub lap: i32,
+    pub money: i32,
+    pub turn_order: i32,
+}
+
+#[derive(Serialize)]
+pub struct GameState {
+    pub players: Vec<PlayerState>,
+    pub current_player_id: i64,
+}
