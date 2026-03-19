@@ -25,3 +25,19 @@ pub struct GameState {
     pub players: Vec<PlayerState>,
     pub current_player_id: i64,
 }
+
+#[derive(Serialize)]
+pub struct TransactionItem {
+    pub id: i64,
+    pub tx_type: String,
+    pub amount: i32,
+    pub target: String,
+    pub created_at: String,
+}
+
+#[derive(Serialize)]
+pub struct TransactionHistoryResponse {
+    pub player_id: i64,
+    pub player_name: String,
+    pub transactions: Vec<TransactionItem>,
+}

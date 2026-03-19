@@ -3,7 +3,7 @@ use serde::Serialize;
 use std::sync::Mutex;
 use rusqlite::Connection;
 
-use crate::service::{play_turn_api, next_turn, get_game_state, reset_game};
+use crate::service::{play_turn_api, next_turn, get_game_state, reset_game, get_current_player_transactions};
 
 
 // 🔁 게임 초기화
@@ -72,6 +72,21 @@ pub async fn next_turn_handler(
         Ok(_) => HttpResponse::Ok().json(SimpleResponse { ok: true }),
         Err(e) => {
             println!("❌ next_turn error: {:?}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+#[get("/api/transactions/current")]
+pub async fn current_transactions_handler(
+    db: web::Data<Mutex<Connection>>,
+) -> impl Responder {
+    let conn = db.lock().unwrap();
+
+    match get_current_player_transactions(&conn, 1) {
+        Ok(history) => HttpResponse::Ok().json(history),
+        Err(e) => {
+            println!("❌ current_transactions error: {:?}", e);
             HttpResponse::InternalServerError().finish()
         }
     }

@@ -433,40 +433,69 @@ if (payBtn) {
 const accountBtn = document.getElementById("accountBtn");
 const modal = document.getElementById("accountModal");
 const closeModal = document.getElementById("closeModal");
+const accountModalTitle = modal?.querySelector("h2");
 
 accountBtn.onclick = () => {
   modal.classList.remove("hidden");
 
-  loadDummyTransactions(); // 데이터 채우기
+  loadTransactionsFromApi();
 };
 
 closeModal.onclick = () => {
   modal.classList.add("hidden");
 };
 
-function loadDummyTransactions() {
+async function loadTransactionsFromApi() {
   const tbody = document.getElementById("transactionBody");
+  const BASE_URL = "http://localhost:8080";
 
-  // 기존 내용 초기화
   tbody.innerHTML = "";
 
-  const dummyData = [
-    { id: 1, type: "입금", amount: 10000, time: "12:01", target: "시작 보너스" },
-    { id: 2, type: "출금", amount: 2000, time: "12:05", target: "통행료" },
-    { id: 3, type: "출금", amount: 3000, time: "12:10", target: "토지 구매" },
-  ];
+  try {
+    const res = await fetch(`${BASE_URL}/api/transactions/current`);
 
-  dummyData.forEach(tx => {
-    const row = document.createElement("tr");
+    if (!res.ok) {
+      throw new Error(`Backend error: ${res.status}`);
+    }
 
-    row.innerHTML = `
-      <td>${tx.id}</td>
-      <td>${tx.type}</td>
-      <td>${tx.amount}</td>
-      <td>${tx.time}</td>
-      <td>${tx.target}</td>
-    `;
+    const data = await res.json();
+    const transactions = data.transactions ?? [];
+    const playerName = data.player_name ?? "현재 플레이어";
 
-    tbody.appendChild(row);
-  });
+    if (accountModalTitle) {
+      accountModalTitle.textContent = `${playerName} 계좌 거래 내역`;
+    }
+
+    if (transactions.length === 0) {
+      const emptyRow = document.createElement("tr");
+      emptyRow.innerHTML = `<td colspan="5">거래 내역이 없습니다.</td>`;
+      tbody.appendChild(emptyRow);
+      return;
+    }
+
+    transactions.forEach(tx => {
+      const row = document.createElement("tr");
+      const txTypeLabel = tx.tx_type === "deposit" ? "입금" : "출금";
+
+      row.innerHTML = `
+        <td>${tx.id}</td>
+        <td>${txTypeLabel}</td>
+        <td>${formatMoney(tx.amount)}</td>
+        <td>${tx.created_at}</td>
+        <td>${tx.target}</td>
+      `;
+
+      tbody.appendChild(row);
+    });
+  } catch (err) {
+    console.error("❌ Failed to load transactions:", err);
+
+    if (accountModalTitle) {
+      accountModalTitle.textContent = "계좌 거래 내역";
+    }
+
+    const errorRow = document.createElement("tr");
+    errorRow.innerHTML = `<td colspan="5">거래 내역 조회 실패</td>`;
+    tbody.appendChild(errorRow);
+  }
 }

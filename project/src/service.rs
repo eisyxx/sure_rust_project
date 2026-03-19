@@ -1,6 +1,6 @@
 use rand::Rng;
 use rusqlite::{Connection, Result};
-use crate::dto::{TurnResponse, GameState, PlayerState};
+use crate::dto::{TurnResponse, GameState, PlayerState, TransactionHistoryResponse, TransactionItem};
 use crate::init_db::create_db::init_db;
 use crate::init_db::init_player::create_player;
 use crate::init_db::init_tiles::init_tiles;
@@ -229,9 +229,17 @@ pub fn next_turn(conn: &Connection, game_id: i32) -> Result<()> {
 
 // 💰 월급
 fn give_salary(conn: &Connection, player_id: i64) -> Result<()> {
+    let salary_amount = 20;
+
     conn.execute(
-        "UPDATE players SET money = money + 20 WHERE id = ?1",
-        (player_id,),
+        "UPDATE players SET money = money + ?1 WHERE id = ?2",
+        (salary_amount, player_id),
+    )?;
+
+    conn.execute(
+        "INSERT INTO transactions (player_id, type, amount, target, created_at)
+         VALUES (?1, 'deposit', ?2, '월급', datetime('now', '+9 hours'))",
+        (player_id, salary_amount),
     )?;
 
     let name: String = conn.query_row(
@@ -240,7 +248,7 @@ fn give_salary(conn: &Connection, player_id: i64) -> Result<()> {
         |row| row.get(0),
     )?;
 
-    println!("💰 {} got +20 salary!", name);
+    println!("💰 {} got +{} salary!", name, salary_amount);
 
     Ok(())
 }
@@ -287,4 +295,36 @@ pub fn play_turn(conn: &Connection, game_id: i32) -> Result<(bool)> {
     next_turn(conn, game_id)?;
 
     Ok(false)
+}
+
+pub fn get_current_player_transactions(
+    conn: &Connection,
+    game_id: i32,
+) -> Result<TransactionHistoryResponse> {
+    let (player_id, player_name, _, _) = get_current_player(conn, game_id)?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, type, amount, target, created_at
+         FROM transactions
+         WHERE player_id = ?1
+         ORDER BY id DESC",
+    )?;
+
+    let transactions = stmt
+        .query_map((player_id,), |row| {
+            Ok(TransactionItem {
+                id: row.get(0)?,
+                tx_type: row.get(1)?,
+                amount: row.get(2)?,
+                target: row.get(3)?,
+                created_at: row.get(4)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(TransactionHistoryResponse {
+        player_id,
+        player_name,
+        transactions,
+    })
 }
