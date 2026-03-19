@@ -1,5 +1,29 @@
 use rand::Rng;
 use rusqlite::{Connection, Result};
+use crate::dto::TurnResponse;
+
+// API용
+pub fn play_turn_api(conn: &Connection, game_id: i32) -> Result<TurnResponse> {
+    let (player_id, player_name, old_position, _) = get_current_player(conn, game_id)?;
+
+    let dice = roll_dice();
+    let (new_position, passed_start) = move_player(conn, player_id, dice)?;
+
+    if passed_start {
+        give_salary(conn, player_id)?;
+    }
+
+    let game_end = check_game_end(conn, player_id)?;
+
+    Ok(TurnResponse {
+        player_id,
+        dice,
+        old_position,
+        new_position,
+        passed_start,
+        game_end,
+    })
+}
 
 
 // 🎲 주사위
@@ -65,7 +89,7 @@ fn move_player(conn: &Connection, player_id: i64, dice: u8) -> Result<(i32, bool
 
 
 // 🔄 턴 넘기기
-fn next_turn(conn: &Connection, game_id: i32) -> Result<()> {
+pub fn next_turn(conn: &Connection, game_id: i32) -> Result<()> {
     let current_id_opt: Option<i64> = conn.query_row(
         "SELECT id FROM players
          WHERE game_id = ?1 AND current_turn = 1",
