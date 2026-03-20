@@ -328,3 +328,201 @@ pub fn get_current_player_transactions(
         transactions,
     })
 }
+
+// 토지 소유자 확인
+#[derive(Debug)]
+pub enum PropertyResult {
+    TollPaid,   // 통행료 지불 발생
+    CanBuy,     // 구매 가능 (프론트에서 버튼 띄움)
+    Nothing,    // 아무 일도 없음 (내 땅 등)
+}
+pub fn handle_property(conn: &Connection, player_id: i64) -> Result<PropertyResult> {
+    let position: i32 = conn.query_row(
+        "SELECT position FROM players WHERE id = ?1",
+        (player_id,),
+        |row| row.get(0),
+    )?;
+
+    let owner: Option<i64> = conn.query_row(
+        "SELECT owner_id FROM properties WHERE tile_id = ?1",
+        (position,),
+        |row| row.get(0),
+    ).ok();
+
+    match owner {
+        // 🔴 다른 사람 땅 → 통행료 즉시 처리
+        Some(owner_id) if owner_id != player_id => {
+            let toll: i32 = conn.query_row(
+                "SELECT toll FROM tiles WHERE id = ?1",
+                (position,),
+                |row| row.get(0),
+            )?;
+
+            handle_toll(conn, player_id, owner_id, toll)?;
+            return Ok(PropertyResult::TollPaid);
+        }
+
+        // 🟢 빈 땅 → 구매 가능
+        None => {
+            return Ok(PropertyResult::CanBuy);
+        }
+
+        // 🟡 내 땅
+        _ => {
+            return Ok(PropertyResult::Nothing);
+        }
+    }
+}
+
+// 통행료 처리
+fn handle_toll(conn: &Connection, player_id: i64, owner_id: i64, toll: i32) -> Result<()> {
+    let money: i32 = conn.query_row(
+        "SELECT money FROM players WHERE id = ?1",
+        (player_id,),
+        |row| row.get(0),
+    )?;
+
+    let pay_amount = if money >= toll { toll } else { money };
+
+    // 돈 이동
+    conn.execute(
+        "UPDATE players SET money = money - ?1 WHERE id = ?2",
+        (pay_amount, player_id),
+    )?;
+
+    conn.execute(
+        "UPDATE players SET money = money + ?1 WHERE id = ?2",
+        (pay_amount, owner_id),
+    )?;
+
+    // 거래 기록
+    conn.execute(
+        "INSERT INTO transactions (player_id, type, amount, target, created_at)
+         VALUES (?1, 'withdraw', ?2, '통행료', datetime('now', '+9 hours'))",
+        (player_id, pay_amount),
+    )?;
+
+    // 파산 처리
+    if money < toll {
+        conn.execute(
+            "UPDATE players SET is_bankrupt = 1 WHERE id = ?1",
+            (player_id,),
+        )?;
+        conn.execute(
+            "UPDATE players SET money = money - ?1 WHERE id = ?2",
+            (money, player_id),
+        )?;
+
+        conn.execute(
+            "UPDATE players SET money = money + ?1 WHERE id = ?2",
+            (money, owner_id),
+        )?;
+        conn.execute(
+            "INSERT INTO transactions (player_id, type, amount, target, created_at)
+            VALUES (?1, 'withdraw', ?2, '통행료(파산)', datetime('now', '+9 hours'))",
+            (player_id, money),
+        )?;
+        println!("💥 Player {} bankrupt!", player_id);
+    }
+
+    Ok(())
+}
+
+// 토지 구매
+pub fn buy_property(conn: &Connection, player_id: i64, tile_id: i32, price: i32) -> Result<()> {
+    let money: i32 = conn.query_row(
+        "SELECT money FROM players WHERE id = ?1",
+        (player_id,),
+        |row| row.get(0),
+    )?;
+
+    if money < price {
+    return Err(rusqlite::Error::ExecuteReturnedResults);
+    }
+
+    // 돈 차감
+    conn.execute(
+        "UPDATE players SET money = money - ?1 WHERE id = ?2",
+        (price, player_id),
+    )?;
+
+    // property 등록
+    conn.execute(
+        "UPDATE properties (tile_id, owner_id, price)
+         VALUES (?1, ?2, ?3)",
+        (tile_id, player_id, price),
+    )?;
+
+    // 거래 기록
+    conn.execute(
+        "INSERT INTO transactions (player_id, type, amount, target, created_at)
+         VALUES (?1, 'withdraw', ?2, '토지 구매', datetime('now', '+9 hours'))",
+        (player_id, price),
+    )?;
+
+    println!("🏠 Player {} bought tile {}", player_id, tile_id);
+
+    Ok(())
+}
+
+// 상금 지급 + 승자 발표
+pub fn distribute_rewards(conn: &Connection) -> Result<i64> {
+    let mut stmt = conn.prepare(
+        "SELECT id, money, lap, position
+         FROM players
+         WHERE is_bankrupt = 0"
+    )?;
+
+    let mut players: Vec<(i64, i32, i32, i32)> = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get(0)?, // id
+                row.get(1)?, // money
+                row.get(2)?, // lap
+                row.get(3)?, // position
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // 정렬: lap DESC → position DESC
+    players.sort_by(|a, b| {
+        b.2.cmp(&a.2) // lap
+            .then(b.3.cmp(&a.3)) // position
+    });
+
+    let rewards = vec![150, 120, 80];
+
+    for (i, (player_id, _, _, _)) in players.iter().enumerate() {
+        if i >= rewards.len() {
+            break;
+        }
+
+        let reward = rewards[i];
+
+        conn.execute(
+            "UPDATE players SET money = money + ?1 WHERE id = ?2",
+            (reward, player_id),
+        )?;
+
+        conn.execute(
+            "INSERT INTO transactions (player_id, type, amount, target, created_at)
+             VALUES (?1, 'deposit', ?2, '상금', datetime('now', '+9 hours'))",
+            (player_id, reward),
+        )?;
+
+        println!("🏆 Player {} gets {}", player_id, reward);
+    }
+
+    // 최종 승자 (money 기준)
+    let winner_id: i64 = conn.query_row(
+        "SELECT id FROM players
+         ORDER BY money DESC
+         LIMIT 1",
+        [],
+        |row| row.get(0),
+    )?;
+
+    println!("🎉 Final Winner: Player {}", winner_id);
+
+    Ok(winner_id)
+}

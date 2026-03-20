@@ -47,6 +47,7 @@ const players = [
 
 let currentPlayer = 0;
 let isAnimating = false;
+let currentTileId = null;
 let turnInProgress = false; // 이번 턴 진행 중 여부 (확인 버튼 제어용)
 const cellSlotMap = new Map();
 
@@ -251,6 +252,30 @@ async function fetchGameState() {
   return res.json();
 }
 
+// 토지 거래 처리
+async function handlePropertyFromApi() {
+  const BASE_URL = "http://localhost:8080";
+
+  try {
+    const res = await fetch(`${BASE_URL}/api/handle-property`, {
+      method: "POST",
+    });
+
+    if (!res.ok) {
+      throw new Error(`Backend error: ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    console.log("🏠 토지 처리 결과:", data);
+
+    updatePropertyUI(data.result);
+
+  } catch (err) {
+    console.error("❌ handle_property 실패:", err);
+  }
+}
+
 
 // 주사위 (백 연결 필요)
 if (rollBtn) {
@@ -283,6 +308,8 @@ if (rollBtn) {
         tile_type // 앞으로 백에서 줄 예정
       } = data;
 
+      currentTileId = new_position; 
+
       console.log("🎲 Dice result:", data);
 
       diceEl.textContent = dice;
@@ -300,6 +327,8 @@ if (rollBtn) {
 
       const state = await fetchGameState();
       syncPlayersFromState(state);
+
+      await handlePropertyFromApi();
 
       // 월급 로그 (백에서 처리됨)
       if (passed_start) {
@@ -398,21 +427,66 @@ function resetActionButtons() {
   document.getElementById("payBtn").style.display = "none";
 }
 
+// UI 제어 함수 추가??
+function updatePropertyUI(result) {
+  resetActionButtons();
+
+  const buyBtn = document.getElementById("buyBtn");
+  const payBtn = document.getElementById("payBtn"); 
+
+  if (result === "CAN_BUY") {
+    buyBtn.style.display = "block";
+  }
+
+  if (result === "TOLL") {
+    payBtn.style.display = "block";
+  }
+
+  if (result === "NONE") {
+    console.log("아무 이벤트 없음");
+  }
+}
+
 
 // 구매 버튼
 const buyBtn = document.getElementById("buyBtn");
 
 if (buyBtn) {
-  buyBtn.onclick = () => {
+  buyBtn.onclick = async () => {
     const result = confirm("구매하시겠습니까?");
+    if (!result) return;
 
-    if (result) {
-      alert("구매 완료!");
-      // TODO: Rust에 구매 요청 보내기
-    } else {
-      console.log("구매 취소");
+    const BASE_URL = "http://localhost:8080";
+
+    try {
+      const res = await fetch(`${BASE_URL}/api/buy-property`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tile_id: currentTileId
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Backend error: ${res.status}`);
+      }
+
+      await res.json();
+
+      alert("🏠 토지 구매 완료!");
+
+      resetActionButtons();
+
+      // 상태 갱신 (중요)
+      const state = await fetchGameState();
+      syncPlayersFromState(state);
+
+    } catch (err) {
+      console.error("❌ 구매 실패:", err);
+      alert("구매 실패");
     }
-    
   };
 }
 
@@ -420,12 +494,31 @@ if (buyBtn) {
 const payBtn = document.getElementById("payBtn");
 
 if (payBtn) {
-  payBtn.onclick = () => {
-    const fee = 2000; // 임시값
-    alert(`${fee}원이 출금되었습니다.`);
-    // TODO: Rust에 지불 요청
+  payBtn.onclick = async () => {
+    const BASE_URL = "http://localhost:8080";
 
-    resetActionButtons(); // 행동 끝나면 버튼 숨김
+    try {
+      const res = await fetch(`${BASE_URL}/api/pay-toll`, {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        throw new Error(`Backend error: ${res.status}`);
+      }
+
+      await res.json();
+
+      alert("💸 통행료 지불 완료");
+
+      resetActionButtons();
+
+      const state = await fetchGameState();
+      syncPlayersFromState(state);
+
+    } catch (err) {
+      console.error("❌ 통행료 실패:", err);
+      alert("통행료 지불 실패");
+    }
   };
 }
 
@@ -499,3 +592,5 @@ async function loadTransactionsFromApi() {
     tbody.appendChild(errorRow);
   }
 }
+
+
