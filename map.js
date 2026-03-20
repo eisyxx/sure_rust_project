@@ -17,6 +17,7 @@ const path = createPath(size);
 let currentPlayerId = null;
 let gameFinished = false;
 let isAnimating = false;
+let pendingDecideResult = null;
 
 buildBoard();
 hideUnusedButtons();
@@ -100,11 +101,43 @@ function bindEvents() {
   };
 
   buyBtn.onclick = async () => {
-    await sendDecide(true);
+    buyBtn.disabled = true;
+
+    try {
+      const response = await fetch("/api/decide", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ will_buy: true }),
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "결정 처리 실패");
+      }
+
+      pendingDecideResult = await response.json();
+      applyState(pendingDecideResult);
+      alert("구매에 성공했습니다!");
+      buyBtn.style.display = "none";
+    } catch (error) {
+      alert(error.message || "오류가 발생했습니다.");
+      buyBtn.disabled = false;
+    }
   };
 
   confirmBtn.onclick = async () => {
-    await sendDecide(false);
+    if (pendingDecideResult !== null) {
+      // 구매 후 확인 → 턴 마무리만 (알림은 구매 시 이미 표시됨)
+      pendingDecideResult = null;
+      confirmBtn.style.display = "none";
+
+      if (!gameFinished) {
+        rollBtn.disabled = false;
+      }
+    } else {
+      // 구매 안 함 → 서버에 skip 전달
+      await sendDecide(false);
+    }
   };
 
   accountBtn.onclick = async () => {
@@ -122,14 +155,16 @@ function bindEvents() {
 }
 
 function showBuyDecision(price) {
-  alert(`이 땅의 가격은 ${formatMoney(price)}입니다. 아래 버튼으로 구매 여부를 결정하세요.`);
+  alert(`이 땅의 가격은 ${formatMoney(price)}입니다. 구매하려면 '토지 구매', 넘어가려면 '확인'을 누르세요.`);
   buyBtn.style.display = "";
+  buyBtn.disabled = false;
   confirmBtn.style.display = "";
 }
 
 async function sendDecide(willBuy) {
   buyBtn.style.display = "none";
   confirmBtn.style.display = "none";
+  pendingDecideResult = null;
 
   try {
     const response = await fetch("/api/decide", {
