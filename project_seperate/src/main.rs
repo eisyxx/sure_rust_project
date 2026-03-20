@@ -82,6 +82,10 @@ async fn turn_api(data: web::Data<AppState>) -> HttpResponse {
         return HttpResponse::Conflict().body("게임이 이미 종료되었습니다.");
     }
 
+    if session.pending.is_some() {
+        return HttpResponse::Conflict().body("이전 턴의 구매 결정을 먼저 완료해주세요.");
+    }
+
     let conn = match data.conn.lock() {
         Ok(conn) => conn,
         Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),

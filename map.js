@@ -298,8 +298,12 @@ function updatePlayerLabel(playerId, name, money, isBankrupt) {
     return;
   }
 
-  const suffix = isBankrupt ? " (파산)" : "";
-  label.textContent = `${name}${suffix}`;
+  label.textContent = name;
+  if (isBankrupt) {
+    label.classList.add('bankrupt');
+  } else {
+    label.classList.remove('bankrupt');
+  }
 }
 
 function renderPlayers() {
