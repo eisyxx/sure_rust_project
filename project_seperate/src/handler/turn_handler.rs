@@ -48,6 +48,8 @@ pub struct ApiTransaction {
     pub tx_type: String,
     pub amount: i32,
     pub target: String,
+    pub balance_before: i32,
+    pub balance_after: i32,
     pub created_at: String,
 }
 
@@ -129,6 +131,8 @@ pub fn get_transactions(conn: &Connection, player_id: i32) -> rusqlite::Result<V
             tx_type: tx.tx_type,
             amount: tx.amount,
             target: tx.target,
+            balance_before: tx.balance_before,
+            balance_after: tx.balance_after,
             created_at: tx.created_at,
         })
         .collect())

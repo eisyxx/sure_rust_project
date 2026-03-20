@@ -6,6 +6,8 @@ pub struct TransactionRecord {
     pub tx_type: String,
     pub amount: i32,
     pub target: String,
+    pub balance_before: i32,
+    pub balance_after: i32,
     pub created_at: String,
 }
 
@@ -16,17 +18,41 @@ pub fn record_transaction(
     amount: i32,
     target: &str,
 ) -> Result<()> {
+    // 현재 플레이어의 잔액을 조회
+    let mut stmt = conn.prepare(
+        "SELECT money FROM players WHERE id = ?1"
+    )?;
+    
+    let balance_after: i32 = stmt.query_row([player_id], |row| {
+        row.get(0)
+    })?;
+    
+    // 거래 전 잔액 계산
+    let balance_before = if tx_type == "deposit" {
+        balance_after - amount
+    } else if tx_type == "withdraw" {
+        balance_after + amount
+    } else {
+        balance_after
+    };
+    
     conn.execute(
-        "INSERT INTO transactions (player_id, type, amount, target, created_at)
-         VALUES (?1, ?2, ?3, ?4, datetime('now','localtime'))",
-        (player_id, tx_type, amount, target),
+        "INSERT INTO transactions (player_id, type, amount, target, balance_before, balance_after, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now','localtime'))",
+        (player_id, tx_type, amount, target, balance_before, balance_after),
     )?;
     Ok(())
 }
 
 pub fn get_transactions_by_player(conn: &Connection, player_id: i32) -> Result<Vec<TransactionRecord>> {
     let mut stmt = conn.prepare(
-        "SELECT id, type, amount, target, created_at
+        "SELECT id,
+                type,
+                amount,
+                target,
+                COALESCE(balance_before, 0) AS balance_before,
+                COALESCE(balance_after, 0) AS balance_after,
+                created_at
          FROM transactions
          WHERE player_id = ?1
          ORDER BY id DESC"
@@ -38,7 +64,9 @@ pub fn get_transactions_by_player(conn: &Connection, player_id: i32) -> Result<V
             tx_type: row.get(1)?,
             amount: row.get(2)?,
             target: row.get(3)?,
-            created_at: row.get(4)?,
+            balance_before: row.get(4)?,
+            balance_after: row.get(5)?,
+            created_at: row.get(6)?,
         })
     })?
     .collect::<Result<Vec<_>, _>>()?;

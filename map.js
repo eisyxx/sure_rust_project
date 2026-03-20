@@ -394,11 +394,18 @@ async function loadTransactions(playerId) {
     const transactions = await response.json();
 
     transactions.forEach((tx) => {
+      const balanceBefore =
+        tx.balance_before ?? tx.before_balance ?? tx.prev_balance ?? null;
+      const balanceAfter =
+        tx.balance_after ?? tx.after_balance ?? tx.next_balance ?? null;
+
       const row = document.createElement("tr");
       row.innerHTML = `
         <td>${tx.id}</td>
         <td>${formatTransactionType(tx.tx_type)}</td>
         <td>${formatMoney(tx.amount)}</td>
+        <td>${formatMoney(balanceBefore)}</td>
+        <td>${formatMoney(balanceAfter)}</td>
         <td>${tx.created_at}</td>
         <td>${tx.target}</td>
       `;
@@ -406,7 +413,7 @@ async function loadTransactions(playerId) {
     });
   } catch (error) {
     const row = document.createElement("tr");
-    row.innerHTML = `<td colspan="5">${error.message || "거래 내역을 불러올 수 없습니다."}</td>`;
+    row.innerHTML = `<td colspan="7">${error.message || "거래 내역을 불러올 수 없습니다."}</td>`;
     transactionBody.appendChild(row);
   }
 }
@@ -436,7 +443,13 @@ function showTurnMessage(result) {
 }
 
 function formatMoney(amount) {
-  return `${Number(amount).toLocaleString()}만원`;
+  const numericAmount = Number(amount);
+
+  if (!Number.isFinite(numericAmount)) {
+    return "-";
+  }
+
+  return `${numericAmount.toLocaleString()}만원`;
 }
 
 function formatTransactionType(txType) {
