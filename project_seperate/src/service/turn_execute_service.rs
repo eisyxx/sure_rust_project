@@ -2,7 +2,7 @@ use rusqlite::Connection;
 
 use crate::repository::{
     player_repo::{update_money, update_position_and_lap, bankrupt},
-    property_repo::set_owner,
+    property_repo::{set_owner, reset_owner_for_player},
     transcaction_repo::record_transaction,
 };
 
@@ -101,6 +101,9 @@ pub fn apply_turn_result(
                 *paid,
                 "bankrupt",
             )?;
+
+            // 소유했던 토지 초기화
+            reset_owner_for_player(conn, player_id)?;
 
             bankrupt(conn, player_id)?;
         }
