@@ -10,8 +10,8 @@ pub fn create_player(conn: &Connection, game_id: i32, name: &str, turn_order: i3
     let player_id = conn.last_insert_rowid();
 
     conn.execute(
-        "INSERT INTO transactions (player_id, type, amount, target, created_at)
-        VALUES (?1, 'deposit', 300, '초기자금', datetime('now', '+9 hours'))",
+        "INSERT INTO transactions (player_id, type, amount, target, balance_before, balance_after, created_at)
+        VALUES (?1, 'deposit', 300, '초기자금', 0, 300, datetime('now', '+9 hours'))",
         (player_id,),
     )?;
 

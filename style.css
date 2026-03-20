@@ -133,6 +133,12 @@ body {
   content: "👉 ";
 }
 
+/* 파산 플레이어 */
+.player.bankrupt {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
 /* 컨트롤 */
 .controls {
   text-align: center;
@@ -176,9 +182,10 @@ body {
   background: white;
   padding: 20px;
   border-radius: 12px;
-  width: 500px;
-  max-height: 400px;
+  width: min(800px, 95vw);
+  max-height: 600px;
   overflow-y: auto;
+  box-sizing: border-box;
 }
 
 /* 테이블 */
