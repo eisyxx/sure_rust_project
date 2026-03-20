@@ -2,8 +2,7 @@ use rusqlite::{Connection, Result};
 
 pub fn init_tiles(conn: &Connection) -> Result<()> {
     // 초기화
-    conn.execute("DELETE FROM tiles", [])?;
-    conn.execute("DELETE FROM event_tiles", [])?;
+    conn.execute("DELETE FROM properties", [])?;
 
     // 시작점 타일을 DB에 추가
     conn.execute(

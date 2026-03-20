@@ -75,6 +75,10 @@ body {
   background-position: center;
 }
 
+.player-marker.pending-placement {
+  visibility: hidden;
+}
+
 /* 플레이어별 이미지 */
 .player1 { background-image: url('assets/player1_marker.png'); }
 .player2 { background-image: url('assets/player2_marker.png'); }

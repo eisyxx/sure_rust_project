@@ -357,12 +357,43 @@ fn advance_turn(
         })
         .collect::<Vec<_>>();
 
-    let game_result = check_game_end(all_players);
+    let game_result = check_game_end(all_players.clone());
     session.game_finished = game_result.is_finished;
-    session.winner_id = game_result.winner_id;
 
-    if !session.game_finished {
+    if session.game_finished {
+        // 게임 종료 시, 상금 지급
+        let mut active_players: Vec<_> = all_players
+            .iter()
+            .filter(|p| !p.is_bankrupt)
+            .cloned()
+            .collect();
+        
+        // lap 기준으로 정렬 (내림차순)
+        active_players.sort_by(|a, b| b.lap.cmp(&a.lap));
+        
+        // 상금 배분 (150 / 120 / 80)
+        let rewards = [150, 120, 80];
+        for (i, player) in active_players.iter().enumerate() {
+            if i < rewards.len() {
+                use crate::repository::player_repo::give_reward;
+                give_reward(conn, player.id, rewards[i])?;
+            }
+        }
+        
+        // 최신 잔액으로 최종 순위 계산
+        let final_players = get_player_states(conn)?
+            .into_iter()
+            .filter(|p| !p.is_bankrupt)
+            .collect::<Vec<_>>();
+        
+        let mut final_sorted = final_players.clone();
+        final_sorted.sort_by(|a, b| b.money.cmp(&a.money));
+        
+        // 우승자 결정
+        session.winner_id = final_sorted.first().map(|p| p.id);
+    } else {
         session.current_turn_index += 1;
+        session.winner_id = None;
     }
 
     Ok(())

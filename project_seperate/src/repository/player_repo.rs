@@ -99,3 +99,12 @@ pub fn update_position_and_lap(
     )?;
     Ok(())
 }
+
+pub fn give_reward(conn: &Connection, player_id: i32, amount: i32) -> Result<()> {
+    update_money(conn, player_id, amount)?;
+    
+    use crate::repository::transcaction_repo::record_transaction;
+    record_transaction(conn, player_id, "deposit", amount, "game_reward")?;
+    
+    Ok(())
+}
