@@ -14,6 +14,10 @@ pub fn decide_buy_property(
         return BuyResult::Skip;
     }
 
+    if tile_type == "start" {
+        return BuyResult::Skip;
+    }
+
     match owner {
         // 1. 이미 소유자가 있는 경우 → 통행료 처리
         Some(owner_id) => {
