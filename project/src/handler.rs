@@ -1,0 +1,93 @@
+use actix_web::{post, get, web, HttpResponse, Responder};
+use serde::Serialize;
+use std::sync::Mutex;
+use rusqlite::Connection;
+
+use crate::service::{play_turn_api, next_turn, get_game_state, reset_game, get_current_player_transactions};
+
+
+// 🔁 게임 초기화
+#[post("/api/reset-game")]
+pub async fn reset_game_handler(
+    db: web::Data<Mutex<Connection>>,
+) -> impl Responder {
+    let conn = db.lock().unwrap();
+
+    match reset_game(&conn, 1).and_then(|_| get_game_state(&conn, 1)) {
+        Ok(state) => HttpResponse::Ok().json(state),
+        Err(e) => {
+            println!("❌ reset_game error: {:?}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+
+// 🎮 게임 상태 조회
+#[get("/api/game-state")]
+pub async fn game_state_handler(
+    db: web::Data<Mutex<Connection>>,
+) -> impl Responder {
+    let conn = db.lock().unwrap();
+
+    match get_game_state(&conn, 1) {
+        Ok(state) => HttpResponse::Ok().json(state),
+        Err(e) => {
+            println!("❌ game_state error: {:?}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+// 🎲 play-turn API
+#[post("/api/play-turn")]
+pub async fn play_turn_handler(
+    db: web::Data<Mutex<Connection>>,
+) -> impl Responder {
+    let conn = db.lock().unwrap();
+
+    match play_turn_api(&conn, 1) {
+        Ok(result) => HttpResponse::Ok().json(result),
+        Err(e) => {
+            println!("❌ play_turn error: {:?}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+
+// 🔄 next-turn API
+#[derive(Serialize)]
+struct SimpleResponse {
+    ok: bool,
+}
+
+#[post("/api/next-turn")]
+pub async fn next_turn_handler(
+    db: web::Data<Mutex<Connection>>,
+) -> impl Responder {
+    let conn = db.lock().unwrap();
+
+    match next_turn(&conn, 1) {
+        Ok(_) => HttpResponse::Ok().json(SimpleResponse { ok: true }),
+        Err(e) => {
+            println!("❌ next_turn error: {:?}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+#[get("/api/transactions/current")]
+pub async fn current_transactions_handler(
+    db: web::Data<Mutex<Connection>>,
+) -> impl Responder {
+    let conn = db.lock().unwrap();
+
+    match get_current_player_transactions(&conn, 1) {
+        Ok(history) => HttpResponse::Ok().json(history),
+        Err(e) => {
+            println!("❌ current_transactions error: {:?}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}

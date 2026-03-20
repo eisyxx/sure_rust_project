@@ -46,21 +46,112 @@ const players = [
 ];
 
 let currentPlayer = 0;
-let diceValue = 0;
-let rolled = false;
 let isAnimating = false;
+let turnInProgress = false; // 이번 턴 진행 중 여부 (확인 버튼 제어용)
+const cellSlotMap = new Map();
 
 
 // DOM
 const diceEl = document.querySelector(".dice");
 const rollBtn = document.getElementById("rollBtn");
 const confirmBtn = document.getElementById("confirmBtn");
+const balanceEl = document.getElementById("balance");
+
+document
+  .querySelectorAll(".player-marker")
+  .forEach(marker => {
+    marker.classList.add("pending-placement");
+    const markerIdClass = Array.from(marker.classList).find(className =>
+      /^player\d+$/.test(className)
+    );
+    if (markerIdClass) {
+      marker.dataset.markerId = markerIdClass;
+    }
+  });
+
+function getCellKey(row, col) {
+  return `${row},${col}`;
+}
+
+function getOrCreateSlots(row, col) {
+  const key = getCellKey(row, col);
+
+  if (!cellSlotMap.has(key)) {
+    cellSlotMap.set(key, [null, null, null, null]);
+  }
+
+  return cellSlotMap.get(key);
+}
+
+function releaseMarkerSlot(cell, markerId) {
+  if (!cell?.classList?.contains("tile")) return;
+  if (!markerId) return;
+
+  const row = Number(cell.dataset.row);
+  const col = Number(cell.dataset.col);
+  const key = getCellKey(row, col);
+  const slots = cellSlotMap.get(key);
+
+  if (!slots) return;
+
+  const slotIndex = slots.findIndex(slotMarkerId => slotMarkerId === markerId);
+
+  if (slotIndex !== -1) {
+    slots[slotIndex] = null;
+  }
+
+  if (slots.every(slotMarkerId => slotMarkerId === null)) {
+    cellSlotMap.delete(key);
+  }
+}
+
+function reserveMarkerSlot(row, col, markerId) {
+  const slots = getOrCreateSlots(row, col);
+
+  const existingSlotIndex = slots.findIndex(
+    slotMarkerId => slotMarkerId === markerId
+  );
+
+  if (existingSlotIndex !== -1) {
+    return existingSlotIndex;
+  }
+
+  const emptySlotIndex = slots.findIndex(slotMarkerId => slotMarkerId === null);
+
+  if (emptySlotIndex !== -1) {
+    slots[emptySlotIndex] = markerId;
+    return emptySlotIndex;
+  }
+
+  return 0;
+}
+
+function placeMarkerInSlot(marker, row, col) {
+  const markerId = marker.dataset.markerId;
+  if (!markerId) return;
+
+  const positions = [
+    { x: -15, y: -15 },
+    { x: 15, y: -15 },
+    { x: -15, y: 15 },
+    { x: 15, y: 15 },
+  ];
+
+  const slotIndex = reserveMarkerSlot(row, col, markerId);
+  const pos = positions[slotIndex] ?? positions[0];
+
+  marker.style.left = "50%";
+  marker.style.top = "50%";
+  marker.style.transform = `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px)`;
+}
 
 
 // 이동 함수
 function movePlayer(playerIndex) {
   const player = players[playerIndex];
   const marker = document.querySelector(`.player${player.id}`);
+
+  if (!marker) return;
 
   const [row, col] = path[player.pos];
 
@@ -69,8 +160,16 @@ function movePlayer(playerIndex) {
   );
 
   if (cell) {
+    const markerId = marker.dataset.markerId;
+    const previousCell = marker.parentElement;
+
+    if (previousCell && previousCell !== cell) {
+      releaseMarkerSlot(previousCell, markerId);
+    }
+
     cell.appendChild(marker);
-    arrangeMarkersInCell(row, col);
+    marker.classList.remove("pending-placement");
+    placeMarkerInSlot(marker, row, col);
   }
 }
 
@@ -90,41 +189,10 @@ async function animateMove(playerIndex, steps) {
   }
 
   isAnimating = false;
-
-  handleTileEvent(playerIndex); // 이동 완료 후 땅 상태 확인
 }
-
-// 한 칸에 여러 명이 있을 때 마커 위치 조정
-function arrangeMarkersInCell(row, col) {
-  const cell = document.querySelector(
-    `.tile[data-row="${row}"][data-col="${col}"]`
-  );
-
-  if (!cell) return;
-
-  const markers = cell.querySelectorAll(".player-marker");
-
-  const positions = [
-    { x: -15, y: -15 },    // 좌상
-    { x: 15, y: -15 },   // 우상
-    { x: -15, y: 15 },   // 좌하
-    { x: 15, y: 15 },  // 우하
-  ];
-
-  markers.forEach((marker, idx) => {
-    const pos = positions[idx % positions.length];
-
-    marker.style.left = "50%";
-    marker.style.top = "50%";
-    marker.style.transform = `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px)`;
-  });
-}
-
 
 // 콘솔용 턴 표시
 function updateTurnUI() {
-  console.log(`현재 턴: Player ${players[currentPlayer].id}`);
-
   const playerEls = document.querySelectorAll(".player");
 
   playerEls.forEach((el, idx) => {
@@ -136,78 +204,192 @@ function updateTurnUI() {
   });
 }
 
+function formatMoney(amount) {
+  return Number(amount).toLocaleString("ko-KR");
+}
 
-// 주사위
+function updateBalanceUI() {
+  const activePlayer = players[currentPlayer];
+
+  if (!balanceEl || !activePlayer) return;
+
+  const balance = activePlayer.money ?? 0;
+  balanceEl.textContent = `💰 잔액: ${formatMoney(balance)}만원`;
+}
+
+function syncPlayersFromState(state) {
+  state.players.forEach(playerState => {
+    const player = players.find(frontPlayer => frontPlayer.id === playerState.id);
+
+    if (!player) return;
+
+    player.pos = playerState.position;
+    player.money = playerState.money;
+  });
+
+  const nextCurrentPlayer = players.findIndex(
+    player => player.id === state.current_player_id
+  );
+
+  if (nextCurrentPlayer !== -1) {
+    currentPlayer = nextCurrentPlayer;
+  }
+
+  players.forEach((_, idx) => movePlayer(idx));
+  updateTurnUI();
+  updateBalanceUI();
+}
+
+async function fetchGameState() {
+  const BASE_URL = "http://localhost:8080";
+  const res = await fetch(`${BASE_URL}/api/game-state`);
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch game state: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+
+// 주사위 (백 연결 필요)
 if (rollBtn) {
-  rollBtn.onclick = async () => {
-    if (rolled || isAnimating) return;
+  rollBtn.addEventListener("click", async (event) => {
+    event.preventDefault();
+    
+    // 애니메이션 중이거나 턴 진행 중이면 막기
+    if (isAnimating || turnInProgress) return;
 
-    diceValue = Math.floor(Math.random() * 6) + 1;
-    diceEl.textContent = diceValue;
+    try {
+      const BASE_URL = "http://localhost:8080";
 
-    rolled = true;
+      const res = await fetch(`${BASE_URL}/api/play-turn`, {
+        method: "POST",
+      });
 
-    await animateMove(currentPlayer, diceValue);
-  };
+      if (!res.ok) {
+        throw new Error(`Backend error: ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      const {
+        player_id,
+        dice,
+        old_position,
+        new_position,
+        passed_start,
+        game_end,
+        tile_type // 앞으로 백에서 줄 예정
+      } = data;
+
+      console.log("🎲 Dice result:", data);
+
+      diceEl.textContent = dice;
+
+      const playerIndex = players.findIndex(p => p.id === player_id);
+
+      // 이동 step 계산
+      const steps =
+        (new_position - old_position + path.length) % path.length;
+
+      await animateMove(playerIndex, steps);
+
+      // 위치 동기화
+      players[playerIndex].pos = new_position;
+
+      const state = await fetchGameState();
+      syncPlayersFromState(state);
+
+      // 월급 로그 (백에서 처리됨)
+      if (passed_start) {
+        console.log(`💰 Player ${player_id} salary +20`);
+      }
+
+      // 게임 종료
+      if (game_end) {
+        alert(`Player ${player_id} wins!`);
+        return;
+      }
+
+      turnInProgress = true; // 확인 버튼 활성 상태
+
+    } catch (err) {
+      console.error("❌ Roll dice error:", err);
+      alert("주사위 던지기 실패: " + err.message);
+    }
+  });
 }
 
 
 // 확인버튼: 턴 넘기기
 if (confirmBtn) {
-  confirmBtn.onclick = async () => {
-    if (!rolled || isAnimating) return;
+  confirmBtn.addEventListener("click", async (event) => {
+    event.preventDefault();
+    
+    if (!turnInProgress || isAnimating) return;
 
-    resetActionButtons(); // 턴 넘기기 전에 버튼 초기화
+    try {
+      resetActionButtons();
 
-    currentPlayer = (currentPlayer + 1) % players.length;
+      const BASE_URL = "http://localhost:8080";
 
-    rolled = false;
-    diceEl.textContent = "-";
+      const res = await fetch(`${BASE_URL}/api/next-turn`, {
+        method: "POST",
+      });
 
-    updateTurnUI();
-  };
+      if (!res.ok) {
+        throw new Error(`Backend error: ${res.status}`);
+      }
+
+      await res.json();
+
+      const state = await fetchGameState();
+      syncPlayersFromState(state);
+
+      turnInProgress = false;
+      diceEl.textContent = "-";
+    } catch (err) {
+      console.error("❌ Next turn error:", err);
+      alert("턴 넘기기 실패: " + err.message);
+    }
+  });
+} else {
+  console.error("❌ confirmBtn not found!");
 }
 
 
 // 초기화
-function initGame() {
-  players.forEach((_, idx) => movePlayer(idx));
-  updateTurnUI();
+async function initGame() {
+  try {
+    const BASE_URL = "http://localhost:8080";
+
+    const res = await fetch(`${BASE_URL}/api/reset-game`, {
+      method: "POST",
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to reset game: ${res.status}`);
+    }
+
+    const state = await res.json();
+
+    turnInProgress = false;
+    isAnimating = false;
+    diceEl.textContent = "-";
+    resetActionButtons();
+    syncPlayersFromState(state);
+    
+  } catch (err) {
+    console.error("❌ Failed to init game:", err);
+    // 폴백: 기본 초기화
+    players.forEach((_, idx) => movePlayer(idx));
+    updateTurnUI();
+    updateBalanceUI();
+  }
 }
 
 initGame();
-
-
-// 땅 상태 (임시 랜덤)
-function getTileType() {
-  const types = ["buy", "toll", "event"];
-  return types[Math.floor(Math.random() * types.length)];
-}
-
-
-// 땅 도착 시 처리
-function handleTileEvent(playerIndex) {
-  const type = getTileType();
-
-  resetActionButtons(); // 먼저 초기화
-
-  if (type === "buy") {
-    alert("구매가 가능한 토지입니다.");
-
-    // 구매 버튼 표시
-    document.getElementById("buyBtn").style.display = "inline-block";
-
-  } else if (type === "toll") {
-    const fee = 2000;
-    alert(`통행료 ${fee}원을 지불해야 합니다.`);
-
-    // 통행료 버튼 표시
-    document.getElementById("payBtn").style.display = "inline-block";
-
-  } else {
-    alert("이벤트 칸입니다!");
-  }
-}
 
 
 // 모든 버튼 숨기기
@@ -215,6 +397,7 @@ function resetActionButtons() {
   document.getElementById("buyBtn").style.display = "none";
   document.getElementById("payBtn").style.display = "none";
 }
+
 
 // 구매 버튼
 const buyBtn = document.getElementById("buyBtn");
@@ -250,40 +433,69 @@ if (payBtn) {
 const accountBtn = document.getElementById("accountBtn");
 const modal = document.getElementById("accountModal");
 const closeModal = document.getElementById("closeModal");
+const accountModalTitle = modal?.querySelector("h2");
 
 accountBtn.onclick = () => {
   modal.classList.remove("hidden");
 
-  loadDummyTransactions(); // 데이터 채우기
+  loadTransactionsFromApi();
 };
 
 closeModal.onclick = () => {
   modal.classList.add("hidden");
 };
 
-function loadDummyTransactions() {
+async function loadTransactionsFromApi() {
   const tbody = document.getElementById("transactionBody");
+  const BASE_URL = "http://localhost:8080";
 
-  // 기존 내용 초기화
   tbody.innerHTML = "";
 
-  const dummyData = [
-    { id: 1, type: "입금", amount: 10000, time: "12:01", target: "시작 보너스" },
-    { id: 2, type: "출금", amount: 2000, time: "12:05", target: "통행료" },
-    { id: 3, type: "출금", amount: 3000, time: "12:10", target: "토지 구매" },
-  ];
+  try {
+    const res = await fetch(`${BASE_URL}/api/transactions/current`);
 
-  dummyData.forEach(tx => {
-    const row = document.createElement("tr");
+    if (!res.ok) {
+      throw new Error(`Backend error: ${res.status}`);
+    }
 
-    row.innerHTML = `
-      <td>${tx.id}</td>
-      <td>${tx.type}</td>
-      <td>${tx.amount}</td>
-      <td>${tx.time}</td>
-      <td>${tx.target}</td>
-    `;
+    const data = await res.json();
+    const transactions = data.transactions ?? [];
+    const playerName = data.player_name ?? "현재 플레이어";
 
-    tbody.appendChild(row);
-  });
+    if (accountModalTitle) {
+      accountModalTitle.textContent = `${playerName} 계좌 거래 내역`;
+    }
+
+    if (transactions.length === 0) {
+      const emptyRow = document.createElement("tr");
+      emptyRow.innerHTML = `<td colspan="5">거래 내역이 없습니다.</td>`;
+      tbody.appendChild(emptyRow);
+      return;
+    }
+
+    transactions.forEach(tx => {
+      const row = document.createElement("tr");
+      const txTypeLabel = tx.tx_type === "deposit" ? "입금" : "출금";
+
+      row.innerHTML = `
+        <td>${tx.id}</td>
+        <td>${txTypeLabel}</td>
+        <td>${formatMoney(tx.amount)}</td>
+        <td>${tx.created_at}</td>
+        <td>${tx.target}</td>
+      `;
+
+      tbody.appendChild(row);
+    });
+  } catch (err) {
+    console.error("❌ Failed to load transactions:", err);
+
+    if (accountModalTitle) {
+      accountModalTitle.textContent = "계좌 거래 내역";
+    }
+
+    const errorRow = document.createElement("tr");
+    errorRow.innerHTML = `<td colspan="5">거래 내역 조회 실패</td>`;
+    tbody.appendChild(errorRow);
+  }
 }

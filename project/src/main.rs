@@ -1,33 +1,50 @@
+use actix_web::{App, HttpServer, web};
+use std::sync::Mutex;
 use rusqlite::{Connection, Result};
 
 mod init_db;
+mod handler;
+mod service;
+mod dto;
 
-use init_db::create_db::init_db;
-use init_db::init_player::create_player;
-use init_db::init_tiles::init_tiles;
+use service::reset_game;
 
-fn main() -> Result<()> {
-    // SQLite 엔진 로드
+use actix_cors::Cors;
+
+
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    // DB 초기화만 수행
+    if let Err(e) = init() {
+        println!("초기화 에러: {:?}", e);
+    }
+
+    let conn = Connection::open("game.db").unwrap();
+    let data = web::Data::new(Mutex::new(conn));
+
+    HttpServer::new(move || {
+        App::new()
+            .wrap(
+                Cors::default()
+                    .allow_any_origin()
+                    .allow_any_method()
+                    .allow_any_header()
+            )
+            .app_data(data.clone())
+                .service(handler::reset_game_handler)
+            .service(handler::game_state_handler)
+            .service(handler::play_turn_handler)
+            .service(handler::next_turn_handler)
+                .service(handler::current_transactions_handler)
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
+}
+
+fn init() -> Result<()> {
     let conn = Connection::open("game.db")?;
 
-    // DB 초기화 (테이블 생성)
-    init_db(&conn)?;
-
-    // 게임 초기 상태 생성
-    conn.execute(
-        "INSERT OR IGNORE INTO games(current_turn, status)
-         VALUES (1,'playing')",
-        [],
-    )?;
-
-    // 맵 초기화
-    init_tiles(&conn)?;
-
-    // 플레이어 4명 생성
-    create_player(&conn, 1, "Player1", 1)?;
-    create_player(&conn, 1, "Player2", 2)?;
-    create_player(&conn, 1, "Player3", 3)?;
-    create_player(&conn, 1, "Player4", 4)?;
-
-    Ok(())
+    reset_game(&conn, 1)
 }

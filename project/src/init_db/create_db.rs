@@ -25,8 +25,9 @@ pub fn init_db(conn: &Connection) -> Result<()> {
             position INTEGER,
             money INTEGER,
             lap INTEGER,
+            is_bankrupt INTEGER,
             turn_order INTEGER,
-            is_bankrupt INTEGER
+            current_turn INTEGER DEFAULT 0 
         )",
         [],
     )?;
@@ -39,7 +40,8 @@ pub fn init_db(conn: &Connection) -> Result<()> {
             id INTEGER PRIMARY KEY,
             name TEXT,
             type TEXT,
-            price INTEGER
+            price INTEGER,
+            toll INTEGER
         )",
         [],
     )?;
