@@ -18,6 +18,7 @@ let currentPlayerId = null;
 let gameFinished = false;
 let isAnimating = false;
 let pendingDecideResult = null;
+let pendingTurnResult = null;
 
 buildBoard();
 hideUnusedButtons();
@@ -55,9 +56,11 @@ function createPath(boardSize) {
 }
 
 function hideUnusedButtons() {
-  buyBtn.style.display = "none";
+  buyBtn.style.display = "";
+  buyBtn.disabled = true;
   payBtn.style.display = "none";
-  confirmBtn.style.display = "none";
+  confirmBtn.style.display = "";
+  confirmBtn.disabled = true;
 }
 
 function bindEvents() {
@@ -83,12 +86,14 @@ function bindEvents() {
       diceEl.textContent = String(result.dice);
 
       await animateTurn(result.player_id, result.dice);
-      applyState(result);
 
       if (result.action_type === "can_buy") {
+        applyState(result);
         waitingForDecision = true;
         showBuyDecision(result.action_amount);
       } else {
+        pendingTurnResult = result;
+        confirmBtn.disabled = false;
         showTurnMessage(result);
       }
     } catch (error) {
@@ -116,9 +121,23 @@ function bindEvents() {
       }
 
       pendingDecideResult = await response.json();
-      applyState(pendingDecideResult);
+
+      const updatedCurrentPlayer = pendingDecideResult.players?.find(
+        (player) => player.id === currentPlayerId,
+      );
+
+      if (updatedCurrentPlayer) {
+        const localCurrentPlayer = players.find((player) => player.id === currentPlayerId);
+
+        if (localCurrentPlayer) {
+          localCurrentPlayer.money = updatedCurrentPlayer.money;
+          updateBalance();
+        }
+      }
+
       alert("구매에 성공했습니다!");
-      buyBtn.style.display = "none";
+      buyBtn.disabled = true;
+      confirmBtn.disabled = false;
     } catch (error) {
       alert(error.message || "오류가 발생했습니다.");
       buyBtn.disabled = false;
@@ -128,8 +147,22 @@ function bindEvents() {
   confirmBtn.onclick = async () => {
     if (pendingDecideResult !== null) {
       // 구매 후 확인 → 턴 마무리만 (알림은 구매 시 이미 표시됨)
+      applyState(pendingDecideResult);
       pendingDecideResult = null;
-      confirmBtn.style.display = "none";
+      buyBtn.disabled = true;
+      confirmBtn.disabled = true;
+      diceEl.textContent = "-";
+
+      if (!gameFinished) {
+        rollBtn.disabled = false;
+      }
+    } else if (pendingTurnResult !== null) {
+      // 이벤트/통행료 등 확인 후 턴 마무리
+      applyState(pendingTurnResult);
+      pendingTurnResult = null;
+      buyBtn.disabled = true;
+      confirmBtn.disabled = true;
+      diceEl.textContent = "-";
 
       if (!gameFinished) {
         rollBtn.disabled = false;
@@ -156,14 +189,13 @@ function bindEvents() {
 
 function showBuyDecision(price) {
   alert(`이 땅의 가격은 ${formatMoney(price)}입니다. 구매하려면 '토지 구매', 넘어가려면 '확인'을 누르세요.`);
-  buyBtn.style.display = "";
   buyBtn.disabled = false;
-  confirmBtn.style.display = "";
+  confirmBtn.disabled = false;
 }
 
 async function sendDecide(willBuy) {
-  buyBtn.style.display = "none";
-  confirmBtn.style.display = "none";
+  buyBtn.disabled = true;
+  confirmBtn.disabled = true;
   pendingDecideResult = null;
 
   try {
@@ -181,6 +213,7 @@ async function sendDecide(willBuy) {
     const result = await response.json();
     applyState(result);
     showTurnMessage(result);
+    diceEl.textContent = "-";
   } catch (error) {
     alert(error.message || "오류가 발생했습니다.");
   } finally {
