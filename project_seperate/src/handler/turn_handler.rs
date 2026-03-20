@@ -3,7 +3,7 @@ use serde::Serialize;
 
 use crate::repository::{
     player_repo::{get_all_players, get_player_states, update_money, update_position_and_lap, PlayerState},
-    property_repo::{get_owner, set_owner},
+    property_repo::{get_owned_tiles, get_owner, set_owner},
     tile_repo::get_tile_info,
     transcaction_repo::{get_transactions_by_player, record_transaction},
 };
@@ -54,8 +54,15 @@ pub struct ApiTransaction {
 }
 
 #[derive(Serialize)]
+pub struct ApiTileOwner {
+    pub tile_id: i32,
+    pub owner_id: i32,
+}
+
+#[derive(Serialize)]
 pub struct ApiStateResponse {
     pub players: Vec<ApiPlayer>,
+    pub tile_owners: Vec<ApiTileOwner>,
     pub current_player_id: Option<i32>,
     pub game_finished: bool,
     pub winner_id: Option<i32>,
@@ -74,6 +81,7 @@ pub struct ApiTurnResponse {
     pub action_amount: i32,
     pub owner_id: Option<i32>,
     pub players: Vec<ApiPlayer>,
+    pub tile_owners: Vec<ApiTileOwner>,
     pub current_player_id: Option<i32>,
     pub game_finished: bool,
     pub winner_id: Option<i32>,
@@ -109,12 +117,26 @@ fn map_players(players: Vec<PlayerState>) -> Vec<ApiPlayer> {
         .collect()
 }
 
+fn map_tile_owners(conn: &Connection) -> rusqlite::Result<Vec<ApiTileOwner>> {
+    let records = get_owned_tiles(conn)?;
+
+    Ok(records
+        .into_iter()
+        .map(|record| ApiTileOwner {
+            tile_id: record.tile_id,
+            owner_id: record.owner_id,
+        })
+        .collect())
+}
+
 pub fn get_state(conn: &Connection, session: &SessionState) -> rusqlite::Result<ApiStateResponse> {
     let players = get_player_states(conn)?;
     let current_player_id = current_player_id(&players, session.current_turn_index);
+    let tile_owners = map_tile_owners(conn)?;
 
     Ok(ApiStateResponse {
         players: map_players(players),
+        tile_owners,
         current_player_id,
         game_finished: session.game_finished,
         winner_id: session.winner_id,
@@ -159,6 +181,7 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
             action_amount: 0,
             owner_id: None,
             players: vec![],
+            tile_owners: vec![],
             current_player_id: None,
             game_finished: true,
             winner_id: None,
@@ -199,6 +222,7 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
         });
 
         let players_after = get_player_states(conn)?;
+        let tile_owners = map_tile_owners(conn)?;
         let cpi = current_player_id(&players_after, session.current_turn_index);
 
         return Ok(ApiTurnResponse {
@@ -213,6 +237,7 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
             action_amount: tile_price,
             owner_id: None,
             players: map_players(players_after),
+            tile_owners,
             current_player_id: cpi,
             game_finished: false,
             winner_id: None,
@@ -239,6 +264,7 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
     advance_turn(conn, session, player_id)?;
 
     let players_after = get_player_states(conn)?;
+    let tile_owners = map_tile_owners(conn)?;
     let current_player_id = current_player_id(&players_after, session.current_turn_index);
 
     let (action_type, action_amount, owner_id) = match &turn_result.action {
@@ -260,6 +286,7 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
         action_amount,
         owner_id,
         players: map_players(players_after),
+        tile_owners,
         current_player_id,
         game_finished: session.game_finished,
         winner_id: session.winner_id,
@@ -286,6 +313,7 @@ pub fn handle_decide(
     advance_turn(conn, session, pending.player_id)?;
 
     let players_after = get_player_states(conn)?;
+    let tile_owners = map_tile_owners(conn)?;
     let current_player_id = current_player_id(&players_after, session.current_turn_index);
 
     let (action_type, action_amount) = if will_buy && pending.money_after_salary >= pending.tile_price {
@@ -306,6 +334,7 @@ pub fn handle_decide(
         action_amount,
         owner_id: None,
         players: map_players(players_after),
+        tile_owners,
         current_player_id,
         game_finished: session.game_finished,
         winner_id: session.winner_id,

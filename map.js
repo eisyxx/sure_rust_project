@@ -13,6 +13,13 @@ const transactionBody = document.getElementById("transactionBody");
 const size = 7;
 const players = [];
 const path = createPath(size);
+const defaultTileColor = "#f0e6d6";
+const tileOwnerColors = {
+  1: "#f7b8b8",
+  2: "#bfe8bf",
+  3: "#bdd4ff",
+  4: "#f8efb0",
+};
 
 let currentPlayerId = null;
 let gameFinished = false;
@@ -137,7 +144,12 @@ function bindEvents() {
         }
       }
 
-      alert("구매에 성공했습니다!");
+      if (pendingDecideResult.action_type === "purchase") {
+        alert("구매에 성공했습니다!");
+      } else {
+        alert("잔액이 부족합니다");
+      }
+
       buyBtn.disabled = true;
       confirmBtn.disabled = false;
     } catch (error) {
@@ -247,6 +259,7 @@ function applyState(state) {
   currentPlayerId = state.current_player_id;
   gameFinished = state.game_finished;
 
+  renderTileOwners(state.tile_owners || []);
   renderPlayers();
   updateTurnUI();
   updateBalance();
@@ -293,6 +306,26 @@ function renderPlayers() {
   players.forEach((player) => {
     moveMarker(player.id, player.position);
   });
+}
+
+function renderTileOwners(tileOwners) {
+  const ownerByTile = new Map();
+
+  tileOwners.forEach((entry) => {
+    ownerByTile.set(Number(entry.tile_id), Number(entry.owner_id));
+  });
+
+  for (let tileId = 0; tileId < path.length; tileId += 1) {
+    const [row, col] = path[tileId];
+    const cell = document.querySelector(`.tile[data-row="${row}"][data-col="${col}"]`);
+
+    if (!cell) {
+      continue;
+    }
+
+    const ownerId = ownerByTile.get(tileId);
+    cell.style.backgroundColor = tileOwnerColors[ownerId] || defaultTileColor;
+  }
 }
 
 function moveMarker(playerId, position) {
@@ -436,7 +469,7 @@ function showTurnMessage(result) {
   }
 
   if (result.action_type === "bankrupt") {
-    messages.push(`파산 처리, ${formatMoney(result.action_amount)} 지급`);
+    messages.push("파산하였습니다");
   }
 
   if (messages.length > 0) {
