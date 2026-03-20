@@ -37,6 +37,9 @@ async fn main() -> std::io::Result<()> {
             .service(handler::play_turn_handler)
             .service(handler::next_turn_handler)
                 .service(handler::current_transactions_handler)
+            .service(handler::handle_property_handler)
+            .service(handler::buy_property_handler)
+
     })
     .bind(("127.0.0.1", 8080))?
     .run()
