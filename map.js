@@ -281,18 +281,26 @@ function arrangeMarkersInCell(row, col) {
   }
 
   const markers = cell.querySelectorAll(".player-marker");
-  const positions = [
-    { x: -15, y: -15 },
-    { x: 15, y: -15 },
-    { x: -15, y: 15 },
-    { x: 15, y: 15 },
-  ];
+  const fixedPositions = {
+    1: { x: -15, y: -15 }, // 좌상
+    2: { x: 15, y: -15 },  // 우상
+    3: { x: -15, y: 15 },  // 좌하
+    4: { x: 15, y: 15 },   // 우하
+  };
 
-  markers.forEach((marker, index) => {
-    const markerPosition = positions[index % positions.length];
+  markers.forEach((marker) => {
+    // player1, player2 이런 클래스에서 숫자 추출
+    const match = marker.className.match(/player(\d+)/);
+    if (!match) return;
+
+    const playerId = Number(match[1]);
+    const pos = fixedPositions[playerId];
+
+    if (!pos) return;
+
     marker.style.left = "50%";
     marker.style.top = "50%";
-    marker.style.transform = `translate(-50%, -50%) translate(${markerPosition.x}px, ${markerPosition.y}px)`;
+    marker.style.transform = `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px)`;
   });
 }
 
