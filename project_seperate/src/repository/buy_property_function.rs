@@ -57,10 +57,13 @@ pub fn record_transaction(
     amount: i32,
     target: &str,
 ) -> Result<()> {
+    let balance_before = get_player_money(conn, player_id)?;
+    let balance_after = balance_before - amount;
+
     conn.execute(
-        "INSERT INTO transactions (player_id, type, amount, target, created_at)
-         VALUES (?1, 'withdraw', ?2, ?3, datetime('now','localtime'))",
-        (player_id, amount, target),
+        "INSERT INTO transactions (player_id, type, amount, target, balance_before, balance_after, created_at)
+         VALUES (?1, 'withdraw', ?2, ?3, ?4, ?5, datetime('now','localtime'))",
+        (player_id, amount, target, balance_before, balance_after),
     )?;
     Ok(())
 }
