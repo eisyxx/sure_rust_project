@@ -92,9 +92,11 @@ function bindEvents() {
         waitingForDecision = true;
         showBuyDecision(result.action_amount);
       } else {
+        waitingForDecision = true;
         pendingTurnResult = result;
         confirmBtn.disabled = false;
         showTurnMessage(result);
+        updateCurrentPlayerBalanceFromTurnResult(result);
       }
     } catch (error) {
       alert(error.message || "턴 실행 중 오류가 발생했습니다.");
@@ -440,6 +442,23 @@ function showTurnMessage(result) {
   if (messages.length > 0) {
     alert(messages.join("\n"));
   }
+}
+
+function updateCurrentPlayerBalanceFromTurnResult(result) {
+  const updatedPlayer = result.players?.find((player) => player.id === result.player_id);
+
+  if (!updatedPlayer) {
+    return;
+  }
+
+  const localPlayer = players.find((player) => player.id === result.player_id);
+
+  if (!localPlayer) {
+    return;
+  }
+
+  localPlayer.money = updatedPlayer.money;
+  updateBalance();
 }
 
 function formatMoney(amount) {

@@ -172,9 +172,10 @@ body {
   background: white;
   padding: 20px;
   border-radius: 12px;
-  width: 1500px;
+  width: min(800px, 95vw);
   max-height: 600px;
   overflow-y: auto;
+  box-sizing: border-box;
 }
 
 /* 테이블 */
