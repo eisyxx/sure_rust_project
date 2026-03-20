@@ -20,7 +20,27 @@ fn frontend_path(path: &str) -> PathBuf {
 }
 
 #[get("/")]
-async fn index() -> actix_web::Result<NamedFile> {
+async fn index(data: web::Data<AppState>) -> actix_web::Result<NamedFile> {
+    let conn = match data.conn.lock() {
+        Ok(conn) => conn,
+        Err(_) => return Err(actix_web::error::ErrorInternalServerError("DB 잠금 실패")),
+    };
+
+    repository::init::init_db::init_db(&conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+
+    let mut session = match data.session.lock() {
+        Ok(session) => session,
+        Err(_) => return Err(actix_web::error::ErrorInternalServerError("세션 잠금 실패")),
+    };
+
+    *session = handler::turn_handler::SessionState {
+        current_turn_index: 0,
+        game_finished: false,
+        winner_id: None,
+        pending: None,
+    };
+
     Ok(NamedFile::open(frontend_path("index.html"))?)
 }
 
