@@ -1,289 +1,380 @@
-// 보드 생성
 const board = document.getElementById("board");
-const size = 7;
-
-for (let row = 0; row < size; row++) {
-  for (let col = 0; col < size; col++) {
-    const div = document.createElement("div");
-
-    const isEdge =
-      row === 0 || row === size - 1 || col === 0 || col === size - 1;
-
-    if (isEdge) {
-      div.className = "tile";
-      div.dataset.row = row;
-      div.dataset.col = col;
-    } else {
-      div.className = "empty";
-    }
-
-    board.appendChild(div);
-  }
-}
-
-
-// 경로 생성 (외곽 한 바퀴)
-function createPath(size) {
-  const path = [];
-
-  for (let col = 0; col < size; col++) path.push([0, col]);
-  for (let row = 1; row < size; row++) path.push([row, size - 1]);
-  for (let col = size - 2; col >= 0; col--) path.push([size - 1, col]);
-  for (let row = size - 2; row > 0; row--) path.push([row, 0]);
-
-  return path;
-}
-
-const path = createPath(size);
-
-
-// 게임 상태
-const players = [
-  { id: 1, pos: 0 },
-  { id: 2, pos: 0 },
-  { id: 3, pos: 0 },
-  { id: 4, pos: 0 },
-];
-
-let currentPlayer = 0;
-let diceValue = 0;
-let rolled = false;
-let isAnimating = false;
-
-
-// DOM
 const diceEl = document.querySelector(".dice");
 const rollBtn = document.getElementById("rollBtn");
 const confirmBtn = document.getElementById("confirmBtn");
-
-
-// 이동 함수
-function movePlayer(playerIndex) {
-  const player = players[playerIndex];
-  const marker = document.querySelector(`.player${player.id}`);
-
-  const [row, col] = path[player.pos];
-
-  const cell = document.querySelector(
-    `.tile[data-row="${row}"][data-col="${col}"]`
-  );
-
-  if (cell) {
-    cell.appendChild(marker);
-    arrangeMarkersInCell(row, col);
-  }
-}
-
-
-// 마커 애니메이션 이동
-async function animateMove(playerIndex, steps) {
-  isAnimating = true;
-
-  const player = players[playerIndex];
-
-  for (let i = 0; i < steps; i++) {
-    player.pos = (player.pos + 1) % path.length;
-
-    movePlayer(playerIndex);
-
-    await new Promise(resolve => setTimeout(resolve, 300));
-  }
-
-  isAnimating = false;
-
-  handleTileEvent(playerIndex); // 이동 완료 후 땅 상태 확인
-}
-
-// 한 칸에 여러 명이 있을 때 마커 위치 조정
-function arrangeMarkersInCell(row, col) {
-  const cell = document.querySelector(
-    `.tile[data-row="${row}"][data-col="${col}"]`
-  );
-
-  if (!cell) return;
-
-  const markers = cell.querySelectorAll(".player-marker");
-
-  const positions = [
-    { x: -15, y: -15 },    // 좌상
-    { x: 15, y: -15 },   // 우상
-    { x: -15, y: 15 },   // 좌하
-    { x: 15, y: 15 },  // 우하
-  ];
-
-  markers.forEach((marker, idx) => {
-    const pos = positions[idx % positions.length];
-
-    marker.style.left = "50%";
-    marker.style.top = "50%";
-    marker.style.transform = `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px)`;
-  });
-}
-
-
-// 콘솔용 턴 표시
-function updateTurnUI() {
-  console.log(`현재 턴: Player ${players[currentPlayer].id}`);
-
-  const playerEls = document.querySelectorAll(".player");
-
-  playerEls.forEach((el, idx) => {
-    if (idx === currentPlayer) {
-      el.classList.add("active");
-    } else {
-      el.classList.remove("active");
-    }
-  });
-}
-
-
-// 주사위
-if (rollBtn) {
-  rollBtn.onclick = async () => {
-    if (rolled || isAnimating) return;
-
-    diceValue = Math.floor(Math.random() * 6) + 1;
-    diceEl.textContent = diceValue;
-
-    rolled = true;
-
-    await animateMove(currentPlayer, diceValue);
-  };
-}
-
-
-// 확인버튼: 턴 넘기기
-if (confirmBtn) {
-  confirmBtn.onclick = async () => {
-    if (!rolled || isAnimating) return;
-
-    resetActionButtons(); // 턴 넘기기 전에 버튼 초기화
-
-    currentPlayer = (currentPlayer + 1) % players.length;
-
-    rolled = false;
-    diceEl.textContent = "-";
-
-    updateTurnUI();
-  };
-}
-
-
-// 초기화
-function initGame() {
-  players.forEach((_, idx) => movePlayer(idx));
-  updateTurnUI();
-}
-
-initGame();
-
-
-// 땅 상태 (임시 랜덤)
-function getTileType() {
-  const types = ["buy", "toll", "event"];
-  return types[Math.floor(Math.random() * types.length)];
-}
-
-
-// 땅 도착 시 처리
-function handleTileEvent(playerIndex) {
-  const type = getTileType();
-
-  resetActionButtons(); // 먼저 초기화
-
-  if (type === "buy") {
-    alert("구매가 가능한 토지입니다.");
-
-    // 구매 버튼 표시
-    document.getElementById("buyBtn").style.display = "inline-block";
-
-  } else if (type === "toll") {
-    const fee = 2000;
-    alert(`통행료 ${fee}원을 지불해야 합니다.`);
-
-    // 통행료 버튼 표시
-    document.getElementById("payBtn").style.display = "inline-block";
-
-  } else {
-    alert("이벤트 칸입니다!");
-  }
-}
-
-
-// 모든 버튼 숨기기
-function resetActionButtons() {
-  document.getElementById("buyBtn").style.display = "none";
-  document.getElementById("payBtn").style.display = "none";
-}
-
-// 구매 버튼
 const buyBtn = document.getElementById("buyBtn");
-
-if (buyBtn) {
-  buyBtn.onclick = () => {
-    const result = confirm("구매하시겠습니까?");
-
-    if (result) {
-      alert("구매 완료!");
-      // TODO: Rust에 구매 요청 보내기
-    } else {
-      console.log("구매 취소");
-    }
-    
-  };
-}
-
-// 통행료 버튼
 const payBtn = document.getElementById("payBtn");
-
-if (payBtn) {
-  payBtn.onclick = () => {
-    const fee = 2000; // 임시값
-    alert(`${fee}원이 출금되었습니다.`);
-    // TODO: Rust에 지불 요청
-
-    resetActionButtons(); // 행동 끝나면 버튼 숨김
-  };
-}
-
-
+const balanceEl = document.getElementById("balance");
 const accountBtn = document.getElementById("accountBtn");
 const modal = document.getElementById("accountModal");
 const closeModal = document.getElementById("closeModal");
+const transactionBody = document.getElementById("transactionBody");
 
-accountBtn.onclick = () => {
-  modal.classList.remove("hidden");
+const size = 7;
+const players = [];
+const path = createPath(size);
 
-  loadDummyTransactions(); // 데이터 채우기
-};
+let currentPlayerId = null;
+let gameFinished = false;
+let isAnimating = false;
 
-closeModal.onclick = () => {
-  modal.classList.add("hidden");
-};
+buildBoard();
+hideUnusedButtons();
+bindEvents();
+initGame();
 
-function loadDummyTransactions() {
-  const tbody = document.getElementById("transactionBody");
+function buildBoard() {
+  for (let row = 0; row < size; row += 1) {
+    for (let col = 0; col < size; col += 1) {
+      const div = document.createElement("div");
+      const isEdge = row === 0 || row === size - 1 || col === 0 || col === size - 1;
 
-  // 기존 내용 초기화
-  tbody.innerHTML = "";
+      if (isEdge) {
+        div.className = "tile";
+        div.dataset.row = row;
+        div.dataset.col = col;
+      } else {
+        div.className = "empty";
+      }
 
-  const dummyData = [
-    { id: 1, type: "입금", amount: 10000, time: "12:01", target: "시작 보너스" },
-    { id: 2, type: "출금", amount: 2000, time: "12:05", target: "통행료" },
-    { id: 3, type: "출금", amount: 3000, time: "12:10", target: "토지 구매" },
+      board.appendChild(div);
+    }
+  }
+}
+
+function createPath(boardSize) {
+  const boardPath = [];
+
+  for (let col = 0; col < boardSize; col += 1) boardPath.push([0, col]);
+  for (let row = 1; row < boardSize; row += 1) boardPath.push([row, boardSize - 1]);
+  for (let col = boardSize - 2; col >= 0; col -= 1) boardPath.push([boardSize - 1, col]);
+  for (let row = boardSize - 2; row > 0; row -= 1) boardPath.push([row, 0]);
+
+  return boardPath;
+}
+
+function hideUnusedButtons() {
+  buyBtn.style.display = "none";
+  payBtn.style.display = "none";
+  confirmBtn.style.display = "none";
+}
+
+function bindEvents() {
+  rollBtn.onclick = async () => {
+    if (isAnimating || gameFinished) {
+      return;
+    }
+
+    rollBtn.disabled = true;
+    let waitingForDecision = false;
+
+    try {
+      const response = await fetch("/api/turn", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "턴 실행 실패");
+      }
+
+      const result = await response.json();
+      diceEl.textContent = String(result.dice);
+
+      await animateTurn(result.player_id, result.dice);
+      applyState(result);
+
+      if (result.action_type === "can_buy") {
+        waitingForDecision = true;
+        showBuyDecision(result.action_amount);
+      } else {
+        showTurnMessage(result);
+      }
+    } catch (error) {
+      alert(error.message || "턴 실행 중 오류가 발생했습니다.");
+    } finally {
+      if (!waitingForDecision && !gameFinished) {
+        rollBtn.disabled = false;
+      }
+    }
+  };
+
+  buyBtn.onclick = async () => {
+    await sendDecide(true);
+  };
+
+  confirmBtn.onclick = async () => {
+    await sendDecide(false);
+  };
+
+  accountBtn.onclick = async () => {
+    if (!currentPlayerId) {
+      return;
+    }
+
+    modal.classList.remove("hidden");
+    await loadTransactions(currentPlayerId);
+  };
+
+  closeModal.onclick = () => {
+    modal.classList.add("hidden");
+  };
+}
+
+function showBuyDecision(price) {
+  alert(`이 땅의 가격은 ${formatMoney(price)}입니다. 아래 버튼으로 구매 여부를 결정하세요.`);
+  buyBtn.style.display = "";
+  confirmBtn.style.display = "";
+}
+
+async function sendDecide(willBuy) {
+  buyBtn.style.display = "none";
+  confirmBtn.style.display = "none";
+
+  try {
+    const response = await fetch("/api/decide", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ will_buy: willBuy }),
+    });
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || "결정 처리 실패");
+    }
+
+    const result = await response.json();
+    applyState(result);
+    showTurnMessage(result);
+  } catch (error) {
+    alert(error.message || "오류가 발생했습니다.");
+  } finally {
+    if (!gameFinished) {
+      rollBtn.disabled = false;
+    }
+  }
+}
+
+async function initGame() {
+  try {
+    const response = await fetch("/api/state");
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || "초기 상태 조회 실패");
+    }
+
+    const state = await response.json();
+    applyState(state);
+  } catch (error) {
+    balanceEl.textContent = "잔액: 연결 실패";
+    alert(error.message || "서버와 연결할 수 없습니다.");
+  }
+}
+
+function applyState(state) {
+  syncPlayers(state.players);
+  currentPlayerId = state.current_player_id;
+  gameFinished = state.game_finished;
+
+  renderPlayers();
+  updateTurnUI();
+  updateBalance();
+
+  if (gameFinished) {
+    rollBtn.disabled = true;
+
+    if (state.winner_id) {
+      alert(`게임 종료! 승자는 Player ${state.winner_id} 입니다.`);
+    }
+  }
+}
+
+function syncPlayers(serverPlayers) {
+  players.length = 0;
+
+  serverPlayers.forEach((player) => {
+    players.push({
+      id: player.id,
+      name: player.name,
+      position: player.position,
+      money: player.money,
+      lap: player.lap,
+      turnOrder: player.turn_order,
+      isBankrupt: player.is_bankrupt,
+    });
+
+    updatePlayerLabel(player.id, player.name, player.money, player.is_bankrupt);
+  });
+}
+
+function updatePlayerLabel(playerId, name, money, isBankrupt) {
+  const label = document.querySelector(`.p${playerId}`);
+
+  if (!label) {
+    return;
+  }
+
+  const suffix = isBankrupt ? " (파산)" : "";
+  label.textContent = `${name}${suffix}`;
+}
+
+function renderPlayers() {
+  players.forEach((player) => {
+    moveMarker(player.id, player.position);
+  });
+}
+
+function moveMarker(playerId, position) {
+  const marker = document.querySelector(`.player${playerId}`);
+  const [row, col] = path[position];
+  const cell = document.querySelector(`.tile[data-row="${row}"][data-col="${col}"]`);
+
+  if (!marker || !cell) {
+    return;
+  }
+
+  cell.appendChild(marker);
+  arrangeMarkersInCell(row, col);
+}
+
+function arrangeMarkersInCell(row, col) {
+  const cell = document.querySelector(`.tile[data-row="${row}"][data-col="${col}"]`);
+
+  if (!cell) {
+    return;
+  }
+
+  const markers = cell.querySelectorAll(".player-marker");
+  const positions = [
+    { x: -15, y: -15 },
+    { x: 15, y: -15 },
+    { x: -15, y: 15 },
+    { x: 15, y: 15 },
   ];
 
-  dummyData.forEach(tx => {
-    const row = document.createElement("tr");
-
-    row.innerHTML = `
-      <td>${tx.id}</td>
-      <td>${tx.type}</td>
-      <td>${tx.amount}</td>
-      <td>${tx.time}</td>
-      <td>${tx.target}</td>
-    `;
-
-    tbody.appendChild(row);
+  markers.forEach((marker, index) => {
+    const markerPosition = positions[index % positions.length];
+    marker.style.left = "50%";
+    marker.style.top = "50%";
+    marker.style.transform = `translate(-50%, -50%) translate(${markerPosition.x}px, ${markerPosition.y}px)`;
   });
+}
+
+function updateTurnUI() {
+  const playerEls = document.querySelectorAll(".player");
+
+  playerEls.forEach((element, index) => {
+    const playerId = index + 1;
+
+    if (playerId === currentPlayerId) {
+      element.classList.add("active");
+    } else {
+      element.classList.remove("active");
+    }
+  });
+}
+
+function updateBalance() {
+  const currentPlayer = players.find((player) => player.id === currentPlayerId) || players[0];
+
+  if (!currentPlayer) {
+    balanceEl.textContent = "잔액: -";
+    return;
+  }
+
+  balanceEl.textContent = `잔액: ${formatMoney(currentPlayer.money)}`;
+}
+
+async function animateTurn(playerId, dice) {
+  const player = players.find((entry) => entry.id === playerId);
+
+  if (!player) {
+    return;
+  }
+
+  isAnimating = true;
+
+  for (let step = 0; step < dice; step += 1) {
+    player.position = (player.position + 1) % path.length;
+    moveMarker(player.id, player.position);
+    await sleep(250);
+  }
+
+  isAnimating = false;
+}
+
+async function loadTransactions(playerId) {
+  transactionBody.innerHTML = "";
+
+  try {
+    const response = await fetch(`/api/transactions/${playerId}`);
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || "거래 내역 조회 실패");
+    }
+
+    const transactions = await response.json();
+
+    transactions.forEach((tx) => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${tx.id}</td>
+        <td>${formatTransactionType(tx.tx_type)}</td>
+        <td>${formatMoney(tx.amount)}</td>
+        <td>${tx.created_at}</td>
+        <td>${tx.target}</td>
+      `;
+      transactionBody.appendChild(row);
+    });
+  } catch (error) {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td colspan="5">${error.message || "거래 내역을 불러올 수 없습니다."}</td>`;
+    transactionBody.appendChild(row);
+  }
+}
+
+function showTurnMessage(result) {
+  const messages = [];
+
+  if (result.salary > 0) {
+    messages.push(`월급 ${formatMoney(result.salary)} 지급`);
+  }
+
+  if (result.action_type === "purchase") {
+    messages.push(`토지 구매 ${formatMoney(result.action_amount)}`);
+  }
+
+  if (result.action_type === "pay_toll") {
+    messages.push(`통행료 ${formatMoney(result.action_amount)} 지불`);
+  }
+
+  if (result.action_type === "bankrupt") {
+    messages.push(`파산 처리, ${formatMoney(result.action_amount)} 지급`);
+  }
+
+  if (messages.length > 0) {
+    alert(messages.join("\n"));
+  }
+}
+
+function formatMoney(amount) {
+  return `${Number(amount).toLocaleString()}만원`;
+}
+
+function formatTransactionType(txType) {
+  if (txType === "deposit") {
+    return "입금";
+  }
+
+  if (txType === "withdraw") {
+    return "출금";
+  }
+
+  return txType;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

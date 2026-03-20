@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result};
+use rusqlite::Connection;
 
 pub fn get_tile_info(
     conn: &Connection,
