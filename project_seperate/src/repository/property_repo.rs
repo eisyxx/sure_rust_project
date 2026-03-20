@@ -45,3 +45,12 @@ pub fn get_owned_tiles(conn: &Connection) -> Result<Vec<TileOwnerRecord>> {
 
     Ok(records)
 }
+
+// 소유 토지 초기화
+pub fn reset_owner_for_player(conn: &Connection, player_id: i32) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE properties SET owner_id = NULL WHERE owner_id = ?1",
+        [player_id],
+    )?;
+    Ok(())
+}
