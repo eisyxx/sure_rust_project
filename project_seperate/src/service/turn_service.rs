@@ -44,7 +44,7 @@ pub struct MoveStep {
     pub salary: i32,
 }
 
-/// 주사위 굴리기 + 이동 + 월급 계산만 수행 (구매 결정 제외)
+/// 주사위 굴리기 + 이동 + 월급 계산 수행 (구매 결정 제외)
 pub fn roll_and_move(position: i32, lap: i32, total_tiles: i32) -> MoveStep {
     let dice = roll_dice();
     let move_result = move_player(position, lap, dice, total_tiles);
@@ -102,7 +102,7 @@ pub enum TurnAction {
     Bankrupt { owner_id: i32, paid: i32 },
 }
 
-/// 한 플레이어의 턴을 처리하는 함수
+/// 한 플레이어의 턴 전체를 처리하는 함수
 /// 이동 → 월급 계산 → 타일(토지) 처리 순으로 진행하여 결과를 반환
 pub fn process_turn(input: TurnInput, conn: &Connection) -> TurnResult {
     // 주사위 굴리기
@@ -122,15 +122,15 @@ pub fn process_turn(input: TurnInput, conn: &Connection) -> TurnResult {
         20,
     );
 
-    // 이동 후 타일 정보 가져오기
+    // 이동한 새로운 타일 정보 가져오기
     let (tile_price, tile_toll, _owner_id, tile_type) = match get_tile_info(conn, move_result.new_position) {
             Ok(info) => info,
-            Err(_) => (0, 0, None, String::from("Unknown")), // 기본값 처리
+            Err(_) => (0, 0, None, String::from("Unknown")), 
         };
 
         let tile_owner = match get_owner(conn, move_result.new_position) {
             Ok(owner) => owner,
-            Err(_) => None, // 기본값
+            Err(_) => None,
         };
 
     let mut action = TurnAction::None;
@@ -170,7 +170,7 @@ pub fn process_turn(input: TurnInput, conn: &Connection) -> TurnResult {
         BuyResult::Skip => {}
     }
 
-    // 5. 최종 턴 결과 반환
+    // 최종 턴 결과 반환
     TurnResult {
         dice,
         new_position: move_result.new_position,

@@ -19,6 +19,7 @@ fn frontend_path(path: &str) -> PathBuf {
         .join(path)
 }
 
+// 메인 페이지
 #[get("/")]
 async fn index(data: web::Data<AppState>) -> actix_web::Result<NamedFile> {
     let conn = match data.conn.lock() {
@@ -29,6 +30,7 @@ async fn index(data: web::Data<AppState>) -> actix_web::Result<NamedFile> {
     repository::init::init_db::init_db(&conn)
         .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
 
+    //세션 초기화
     let mut session = match data.session.lock() {
         Ok(session) => session,
         Err(_) => return Err(actix_web::error::ErrorInternalServerError("세션 잠금 실패")),
@@ -44,16 +46,19 @@ async fn index(data: web::Data<AppState>) -> actix_web::Result<NamedFile> {
     Ok(NamedFile::open(frontend_path("index.html"))?)
 }
 
+// JS 파일
 #[get("/map.js")]
 async fn map_script() -> actix_web::Result<NamedFile> {
     Ok(NamedFile::open(frontend_path("map.js"))?)
 }
 
+// CSS 파일
 #[get("/style.css")]
 async fn stylesheet() -> actix_web::Result<NamedFile> {
     Ok(NamedFile::open(frontend_path("style.css"))?)
 }
 
+// 현재 게임 상태 API
 #[get("/api/state")]
 async fn game_state(data: web::Data<AppState>) -> HttpResponse {
     let session = match data.session.lock() {
@@ -71,6 +76,7 @@ async fn game_state(data: web::Data<AppState>) -> HttpResponse {
     }
 }
 
+// 턴 진행 API
 #[post("/api/turn")]
 async fn turn_api(data: web::Data<AppState>) -> HttpResponse {
     let mut session = match data.session.lock() {
@@ -97,6 +103,7 @@ async fn turn_api(data: web::Data<AppState>) -> HttpResponse {
     }
 }
 
+// 구매 결정 API
 #[derive(serde::Deserialize)]
 struct DecideBody {
     will_buy: bool,
@@ -124,6 +131,7 @@ async fn decide_api(body: web::Json<DecideBody>, data: web::Data<AppState>) -> H
     }
 }
 
+// 특정 플레이어 거래 내역 조회 API
 #[get("/api/transactions/{player_id}")]
 async fn player_transactions(path: web::Path<i32>, data: web::Data<AppState>) -> HttpResponse {
     let conn = match data.conn.lock() {
@@ -137,8 +145,10 @@ async fn player_transactions(path: web::Path<i32>, data: web::Data<AppState>) ->
     }
 }
 
+// 서버 실행
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // DB 열기 및 초기화
     let conn = Connection::open("game.db").expect("DB 열기 실패");
     repository::init::init_db::init_db(&conn).expect("DB 초기화 실패");
 
@@ -154,6 +164,7 @@ async fn main() -> std::io::Result<()> {
         }),
     });
 
+    //HTTP 서버 설정
     HttpServer::new(move || {
         App::new()
             .app_data(app_state.clone())

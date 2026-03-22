@@ -13,6 +13,7 @@ pub struct PlayerState {
     pub is_bankrupt: bool,
 }
 
+// 지정 플레이어의 잔액 불러오기
 pub fn get_player_money(conn: &Connection, player_id: i32) -> Result<i32> {
     conn.query_row(
         "SELECT money FROM players WHERE id = ?1",
@@ -21,6 +22,7 @@ pub fn get_player_money(conn: &Connection, player_id: i32) -> Result<i32> {
     )
 }
 
+// 지정 플레이어의 잔액 정보 업데이트
 pub fn update_money(conn: &Connection, player_id: i32, delta: i32) -> Result<()> {
     conn.execute(
         "UPDATE players SET money = money + ?1 WHERE id = ?2",
@@ -29,6 +31,7 @@ pub fn update_money(conn: &Connection, player_id: i32, delta: i32) -> Result<()>
     Ok(())
 }
 
+// 지정 플레이어의 상태를 파산(is_bankrupt)으로 변경
 pub fn bankrupt(conn: &Connection, player_id: i32) -> Result<()> {
     conn.execute(
         "UPDATE players SET money = 0, is_bankrupt = 1 WHERE id = ?1",
@@ -37,6 +40,7 @@ pub fn bankrupt(conn: &Connection, player_id: i32) -> Result<()> {
     Ok(())
 }
 
+// 현재 플레이 중인 모든 플레이어의 상태(id, 위치, 잔액, lap, 파산 여부)를 가져오기
 pub fn get_all_players(conn: &Connection) -> Result<Vec<Player>> {
     let mut stmt = conn.prepare(
         "SELECT id, position, money, lap, is_bankrupt FROM players ORDER BY turn_order"
@@ -56,6 +60,7 @@ pub fn get_all_players(conn: &Connection) -> Result<Vec<Player>> {
     Ok(players)
 }
 
+// 플레이어의 상태 가져오기
 pub fn get_player_states(conn: &Connection) -> Result<Vec<PlayerState>> {
     let mut stmt = conn.prepare(
         "SELECT id, name, position, money, lap, turn_order, is_bankrupt
@@ -79,6 +84,7 @@ pub fn get_player_states(conn: &Connection) -> Result<Vec<PlayerState>> {
     Ok(players)
 }
 
+// 플레이어의 잔액을 지정된 값으로 업데이트 (이벤트, 월급)
 pub fn update_player_money(conn: &Connection, player_id: i32, money: i32) -> Result<()> {
     conn.execute(
         "UPDATE players SET money = ?1 WHERE id = ?2",
@@ -87,6 +93,7 @@ pub fn update_player_money(conn: &Connection, player_id: i32, money: i32) -> Res
     Ok(())
 }
 
+// 플레이어의 현재 위치(pos)와 진행한 바퀴 수(lap)를 업데이트
 pub fn update_position_and_lap(
     conn: &Connection,
     player_id: i32,
@@ -100,6 +107,7 @@ pub fn update_position_and_lap(
     Ok(())
 }
 
+// 플레이어에게 상금 지급: 잔액 증가 후 거래 내역 기록
 pub fn give_reward(conn: &Connection, player_id: i32, amount: i32) -> Result<()> {
     update_money(conn, player_id, amount)?;
     
