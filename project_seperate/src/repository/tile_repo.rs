@@ -21,13 +21,3 @@ pub fn get_tile_info(
         },
     )
 }
-
-// 이벤트 타일의 event_type과 amount를 반환
-pub fn get_event_tile_info(conn: &Connection, tile_id: i32) -> rusqlite::Result<Option<(String, i32)>> {
-    conn.query_row(
-        "SELECT event_type, amount FROM event_tiles WHERE tile_id = ?1",
-        [tile_id],
-        |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?)),
-    )
-    .optional()
-}

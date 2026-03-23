@@ -1,31 +1,75 @@
 use rusqlite::Connection;
 
 use crate::repository::{
+    event_repo::{get_event_info, get_fund_amount},
+    player_repo::get_player_money,
     property_repo::get_player_total_property_price,
-    tile_repo::get_event_tile_info,
 };
 
+/// 이벤트 결과
+#[derive(Debug)]
 pub enum EventResult {
+    WelfareFund { amount: i32 },
+    WelfareFundBankrupt { paid: i32 },
     EstateTax { amount: i32 },
     EstateTaxSkipped,
+    FundReceive { amount: i32 },
     None,
 }
 
-pub fn handle_event(conn: &Connection, player_id: i32, tile_id: i32) -> EventResult {
-    let (event_type, amount) = match get_event_tile_info(conn, tile_id) {
-        Ok(Some(info)) => info,
-        _ => return EventResult::None,
+/// 이벤트 처리
+pub fn handle_event(
+    conn: &Connection,
+    player_id: i32,
+    tile_id: i32,
+) -> EventResult {
+    let (event_type, amount) = match get_event_info(conn, tile_id) {
+        Ok(info) => info,
+        Err(_) => return EventResult::None,
     };
 
     match event_type.as_str() {
+
+        // A: 사회복지기금
+        "fund_add" => {
+            let current_money = match get_player_money(conn, player_id) {
+                Ok(m) => m,
+                Err(_) => return EventResult::None,
+            };
+
+            if current_money >= amount {
+                EventResult::WelfareFund { amount }
+            } else {
+                EventResult::WelfareFundBankrupt { paid: current_money }
+            }
+        }
+
+        // B: 종합부동산세
         "tax_if_property" => {
-            let total = get_player_total_property_price(conn, player_id).unwrap_or(0);
+            let total = get_player_total_property_price(conn, player_id)
+                .unwrap_or(0);
+
             if total >= 100 {
                 EventResult::EstateTax { amount }
             } else {
                 EventResult::EstateTaxSkipped
             }
         }
+
+        // C: 기금 수령
+        "fund_take" => {
+            let fund_amount = match get_fund_amount(conn) {
+                Ok(a) => a,
+                Err(_) => return EventResult::None,
+            };
+
+            if fund_amount > 0 {
+                EventResult::FundReceive { amount: fund_amount }
+            } else {
+                EventResult::None
+            }
+        }
+
         _ => EventResult::None,
     }
 }

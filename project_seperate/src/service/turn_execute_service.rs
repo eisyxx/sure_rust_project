@@ -169,7 +169,7 @@ pub fn apply_turn_result(
                 player_id,
                 "deposit",
                 *amount,
-                "fund_receive",
+                "welfare_fund_receive",
             )?;
 
             // 기금 초기화
@@ -180,10 +180,12 @@ pub fn apply_turn_result(
 
         TurnAction::EstateTaxSkipped => {}
 
-        // 종부세 납부
+        // 이벤트 B: 종합부동산세
         TurnAction::EstateTax { amount } => {
+            // 플레이어 돈 차감
             update_money(conn, player_id, -*amount)?;
 
+            // 거래 기록
             record_transaction(
                 conn,
                 player_id,
