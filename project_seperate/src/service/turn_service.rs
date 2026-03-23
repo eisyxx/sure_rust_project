@@ -4,6 +4,7 @@ use crate::service::{
     movement_service::move_player,
     salary_service::calculate_salary,
     buy_property_service::{decide_buy_property, BuyResult},
+    event_service::{handle_event, EventResult},
     roll_dice_service::roll_dice,
 };
 use crate::repository::tile_repo::get_tile_info;
@@ -57,8 +58,9 @@ pub fn roll_and_move(position: i32, lap: i32, total_tiles: i32) -> MoveStep {
     }
 }
 
-/// MoveStep + 구매 여부로 TurnResult 생성 (통행료/구매/None 처리)
+/// MoveStep + 구매 여부로 TurnResult 생성 (통행료/구매/이벤트/None 처리)
 pub fn build_turn_result(
+    conn: &Connection,
     move_step: MoveStep,
     player_id: i32,
     money_after_salary: i32,
@@ -68,20 +70,28 @@ pub fn build_turn_result(
     will_buy: bool,
     tile_type: &str,
 ) -> TurnResult {
-    let buy_result = decide_buy_property(
-        player_id,
-        money_after_salary,
-        tile_price,
-        tile_toll,
-        tile_owner,
-        will_buy,
-        tile_type.to_string(),
-    );
-    let action = match buy_result {
-        BuyResult::PayToll { owner_id, amount } => TurnAction::PayToll { owner_id, amount },
-        BuyResult::Bankrupt { owner_id, paid } => TurnAction::Bankrupt { owner_id, paid },
-        BuyResult::Purchase { price } => TurnAction::Purchase { price },
-        BuyResult::NotEnoughMoney | BuyResult::Skip => TurnAction::None,
+    let action = if tile_type == "event" {
+        match handle_event(conn, player_id, move_step.new_position) {
+            EventResult::EstateTax { amount } => TurnAction::EstateTax { amount },
+            EventResult::EstateTaxSkipped => TurnAction::EstateTaxSkipped,
+            EventResult::None => TurnAction::None,
+        }
+    } else {
+        let buy_result = decide_buy_property(
+            player_id,
+            money_after_salary,
+            tile_price,
+            tile_toll,
+            tile_owner,
+            will_buy,
+            tile_type.to_string(),
+        );
+        match buy_result {
+            BuyResult::PayToll { owner_id, amount } => TurnAction::PayToll { owner_id, amount },
+            BuyResult::Bankrupt { owner_id, paid } => TurnAction::Bankrupt { owner_id, paid },
+            BuyResult::Purchase { price } => TurnAction::Purchase { price },
+            BuyResult::NotEnoughMoney | BuyResult::Skip => TurnAction::None,
+        }
     };
     TurnResult {
         dice: move_step.dice,
@@ -100,6 +110,8 @@ pub enum TurnAction {
     PayToll { owner_id: i32, amount: i32 },
     Purchase { price: i32 },
     Bankrupt { owner_id: i32, paid: i32 },
+    EstateTax { amount: i32 },
+    EstateTaxSkipped,
 }
 
 /// 한 플레이어의 턴 전체를 처리하는 함수
@@ -133,42 +145,30 @@ pub fn process_turn(input: TurnInput, conn: &Connection) -> TurnResult {
             Err(_) => None,
         };
 
-    let mut action = TurnAction::None;
-
-    // 도착한 타일에서의 행동 결정 (구매 / 통행료 / 파산 등)
-    let buy_result = decide_buy_property(
-        input.player_id,
-        input.money + salary,
-        tile_price,    // 이전 input.tile_price → DB 기반 tile_price 사용
-        tile_toll,     // 이전 input.tile_toll → DB 기반 tile_toll 사용
-        tile_owner,    // 이전 input.owner → DB 기반 tile_owner 사용
-        input.will_buy,
-        tile_type.clone(), // DB 기반 tile_type 사용
-    );
-
-    // 행동 결정
-    match buy_result {
-        // 통행료 지불
-        BuyResult::PayToll { owner_id, amount } => {
-            action = TurnAction::PayToll { owner_id, amount };
+    // 도착한 타일에서의 행동 결정 (이벤트 / 구매 / 통행료 / 파산 등)
+    let action = if tile_type == "event" {
+        match handle_event(conn, input.player_id, move_result.new_position) {
+            EventResult::EstateTax { amount } => TurnAction::EstateTax { amount },
+            EventResult::EstateTaxSkipped => TurnAction::EstateTaxSkipped,
+            EventResult::None => TurnAction::None,
         }
-
-        // 파산 처리
-        BuyResult::Bankrupt { owner_id, paid } => {
-            action = TurnAction::Bankrupt { owner_id, paid };
+    } else {
+        let buy_result = decide_buy_property(
+            input.player_id,
+            input.money + salary,
+            tile_price,
+            tile_toll,
+            tile_owner,
+            input.will_buy,
+            tile_type.clone(),
+        );
+        match buy_result {
+            BuyResult::PayToll { owner_id, amount } => TurnAction::PayToll { owner_id, amount },
+            BuyResult::Bankrupt { owner_id, paid } => TurnAction::Bankrupt { owner_id, paid },
+            BuyResult::Purchase { price } => TurnAction::Purchase { price },
+            BuyResult::NotEnoughMoney | BuyResult::Skip => TurnAction::None,
         }
-
-        // 타일 구매
-        BuyResult::Purchase { price } => {
-            action = TurnAction::Purchase { price };
-        }
-
-        // 돈 부족으로 아무 행동도 못함
-        BuyResult::NotEnoughMoney => {}
-
-        // 구매하지 않기로 선택
-        BuyResult::Skip => {}
-    }
+    };
 
     // 최종 턴 결과 반환
     TurnResult {

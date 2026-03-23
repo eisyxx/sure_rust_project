@@ -48,7 +48,7 @@ pub fn apply_turn_result(
                 player_id,
                 "withdraw",
                 *price,
-                "tile_purchase",
+                &format!("tile{}_purchase", result.new_position),
             )?;
 
             set_owner(
@@ -84,6 +84,9 @@ pub fn apply_turn_result(
 
         // 파산
         TurnAction::Bankrupt { owner_id, paid } => {
+            // 파산 플레이어 잔액을 먼저 차감해야 거래 전/후 잔액이 올바르게 기록된다.
+            update_money(conn, player_id, -*paid)?;
+
             // 잔액을 전부 토지 소유자에게 지급
             update_money(conn, *owner_id, *paid)?;
             record_transaction(
@@ -100,7 +103,7 @@ pub fn apply_turn_result(
                 player_id,
                 "withdraw",
                 *paid,
-                "bankrupt",
+                &format!("bankrupt_to_{}", owner_id),
             )?;
 
             // 소유했던 토지 초기화
@@ -111,6 +114,21 @@ pub fn apply_turn_result(
         }
 
         TurnAction::None => {}
+
+        TurnAction::EstateTaxSkipped => {}
+
+        // 종부세 납부
+        TurnAction::EstateTax { amount } => {
+            update_money(conn, player_id, -*amount)?;
+
+            record_transaction(
+                conn,
+                player_id,
+                "withdraw",
+                *amount,
+                "estate_tax",
+            )?;
+        }
     }
 
     Ok(())

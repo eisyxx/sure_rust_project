@@ -500,6 +500,14 @@ function showTurnMessage(result) {
     messages.push("파산하였습니다");
   }
 
+  if (result.action_type === "estate_tax") {
+    messages.push("토지 구매 금액이 100만원을 초과하여 부동산세금 30만원을 납부합니다.");
+  }
+
+  if (result.action_type === "estate_tax_skipped") {
+    messages.push("부동산세금 조건이 충족되지 않았습니다.");
+  }
+
   if (messages.length > 0) {
     alert(messages.join("\n"));
   }
