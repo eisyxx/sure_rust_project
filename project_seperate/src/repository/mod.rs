@@ -4,3 +4,4 @@ pub mod player_repo;
 pub mod property_repo;
 pub mod tile_repo;
 pub mod transcaction_repo;
+pub mod event_repo;
