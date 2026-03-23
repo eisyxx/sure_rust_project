@@ -4,9 +4,8 @@ use crate::service::{
     movement_service::move_player,
     salary_service::calculate_salary,
     buy_property_service::{decide_buy_property, BuyResult},
-    event_service::{handle_event, EventResult},
     roll_dice_service::roll_dice,
-    ac_event_service::{handle_event, EventResult},
+    event_service::{handle_event, EventResult},
 };
 use crate::repository::tile_repo::get_tile_info;
 use crate::repository::property_repo::get_owner;
@@ -71,29 +70,23 @@ pub fn build_turn_result(
     will_buy: bool,
     tile_type: &str,
 ) -> TurnResult {
-    let action = if tile_type == "event" {
-        match handle_event(conn, player_id, move_step.new_position) {
-            EventResult::EstateTax { amount } => TurnAction::EstateTax { amount },
-            EventResult::EstateTaxSkipped => TurnAction::EstateTaxSkipped,
-            EventResult::None => TurnAction::None,
-        }
-    } else {
-        let buy_result = decide_buy_property(
-            player_id,
-            money_after_salary,
-            tile_price,
-            tile_toll,
-            tile_owner,
-            will_buy,
-            tile_type.to_string(),
-        );
-        match buy_result {
-            BuyResult::PayToll { owner_id, amount } => TurnAction::PayToll { owner_id, amount },
-            BuyResult::Bankrupt { owner_id, paid } => TurnAction::Bankrupt { owner_id, paid },
-            BuyResult::Purchase { price } => TurnAction::Purchase { price },
-            BuyResult::NotEnoughMoney | BuyResult::Skip => TurnAction::None,
-        }
+    let buy_result = decide_buy_property(
+        player_id,
+        money_after_salary,
+        tile_price,
+        tile_toll,
+        tile_owner,
+        will_buy,
+        tile_type.to_string(),
+    );
+
+    let action = match buy_result {
+        BuyResult::PayToll { owner_id, amount } => { TurnAction::PayToll { owner_id, amount } }
+        BuyResult::Bankrupt { owner_id, paid } => { TurnAction::Bankrupt { owner_id, paid } }
+        BuyResult::Purchase { price } => { TurnAction::Purchase { price } }
+        BuyResult::NotEnoughMoney | BuyResult::Skip => { TurnAction::None }
     };
+
     TurnResult {
         dice: move_step.dice,
         new_position: move_step.new_position,
@@ -102,7 +95,6 @@ pub fn build_turn_result(
         action,
     }
 }
-
 
 // 턴 동안 발생한 행동 종류
 #[derive(Debug)]
@@ -168,6 +160,12 @@ pub fn process_turn(input: TurnInput, conn: &Connection) -> TurnResult {
             }
             EventResult::FundReceive { amount } => {
             action = TurnAction::EventFundReceive { amount };
+            }
+            EventResult::EstateTax { amount } => {
+                action = TurnAction::EstateTax { amount };
+            }
+            EventResult::EstateTaxSkipped => {
+                action = TurnAction::EstateTaxSkipped;
             }
             EventResult::None => {}
         }
