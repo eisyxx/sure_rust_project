@@ -321,7 +321,13 @@ pub fn handle_decide(
 
     if will_buy && pending.money_after_salary >= pending.tile_price {
         update_money(conn, pending.player_id, -pending.tile_price)?;
-        record_transaction(conn, pending.player_id, "withdraw", pending.tile_price, "tile_purchase")?;
+        record_transaction(
+            conn,
+            pending.player_id,
+            "withdraw",
+            pending.tile_price,
+            &format!("tile{}_purchase", pending.new_position),
+        )?;
         set_owner(conn, pending.new_position, pending.player_id, pending.tile_price)?;
     }
 
