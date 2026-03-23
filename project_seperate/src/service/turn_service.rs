@@ -4,6 +4,7 @@ use crate::service::{
     movement_service::move_player,
     salary_service::calculate_salary,
     buy_property_service::{decide_buy_property, BuyResult},
+    event_service::{handle_event, EventResult},
     roll_dice_service::roll_dice,
     ac_event_service::{handle_event, EventResult},
 };
@@ -58,8 +59,9 @@ pub fn roll_and_move(position: i32, lap: i32, total_tiles: i32) -> MoveStep {
     }
 }
 
-/// MoveStep + 구매 여부로 TurnResult 생성 (통행료/구매/None 처리)
+/// MoveStep + 구매 여부로 TurnResult 생성 (통행료/구매/이벤트/None 처리)
 pub fn build_turn_result(
+    conn: &Connection,
     move_step: MoveStep,
     player_id: i32,
     money_after_salary: i32,
@@ -69,20 +71,28 @@ pub fn build_turn_result(
     will_buy: bool,
     tile_type: &str,
 ) -> TurnResult {
-    let buy_result = decide_buy_property(
-        player_id,
-        money_after_salary,
-        tile_price,
-        tile_toll,
-        tile_owner,
-        will_buy,
-        tile_type.to_string(),
-    );
-    let action = match buy_result {
-        BuyResult::PayToll { owner_id, amount } => TurnAction::PayToll { owner_id, amount },
-        BuyResult::Bankrupt { owner_id, paid } => TurnAction::Bankrupt { owner_id, paid },
-        BuyResult::Purchase { price } => TurnAction::Purchase { price },
-        BuyResult::NotEnoughMoney | BuyResult::Skip => TurnAction::None,
+    let action = if tile_type == "event" {
+        match handle_event(conn, player_id, move_step.new_position) {
+            EventResult::EstateTax { amount } => TurnAction::EstateTax { amount },
+            EventResult::EstateTaxSkipped => TurnAction::EstateTaxSkipped,
+            EventResult::None => TurnAction::None,
+        }
+    } else {
+        let buy_result = decide_buy_property(
+            player_id,
+            money_after_salary,
+            tile_price,
+            tile_toll,
+            tile_owner,
+            will_buy,
+            tile_type.to_string(),
+        );
+        match buy_result {
+            BuyResult::PayToll { owner_id, amount } => TurnAction::PayToll { owner_id, amount },
+            BuyResult::Bankrupt { owner_id, paid } => TurnAction::Bankrupt { owner_id, paid },
+            BuyResult::Purchase { price } => TurnAction::Purchase { price },
+            BuyResult::NotEnoughMoney | BuyResult::Skip => TurnAction::None,
+        }
     };
     TurnResult {
         dice: move_step.dice,
@@ -104,6 +114,8 @@ pub enum TurnAction {
     EventWelfareFund { amount: i32 },
     EventWelfareFundBankrupt { paid: i32 },
     EventFundReceive { amount: i32 },
+    EstateTax { amount: i32 },
+    EstateTaxSkipped,
 }
 
 /// 한 플레이어의 턴 전체를 처리하는 함수

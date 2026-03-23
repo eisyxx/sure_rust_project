@@ -1,4 +1,5 @@
 pub mod buy_property_service;
+pub mod event_service;
 pub mod game_end_service;
 pub mod roll_dice_service;
 pub mod movement_service;

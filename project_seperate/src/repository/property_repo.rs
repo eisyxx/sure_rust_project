@@ -49,6 +49,15 @@ pub fn get_owned_tiles(conn: &Connection) -> Result<Vec<TileOwnerRecord>> {
     Ok(records)
 }
 
+// 지정 플레이어가 소유한 토지들의 가격 합산을 반환
+pub fn get_player_total_property_price(conn: &Connection, player_id: i32) -> rusqlite::Result<i32> {
+    conn.query_row(
+        "SELECT COALESCE(SUM(price), 0) FROM properties WHERE owner_id = ?1",
+        [player_id],
+        |row| row.get::<_, i32>(0),
+    )
+}
+
 // 지정 플레이어가 소유한 모든 토지의 소유자 정보를 초기화
 pub fn reset_owner_for_player(conn: &Connection, player_id: i32) -> rusqlite::Result<()> {
     conn.execute(
