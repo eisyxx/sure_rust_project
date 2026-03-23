@@ -1,140 +1,84 @@
 use rusqlite::Connection;
+use project::repository::init::init_db::init_db;
 
-use project::service::turn_service::{process_turn, TurnInput};
-use project::service::turn_execute_service::apply_turn_result;
-
-#[test]
-fn test_full_flow_event_c() {
+fn setup_test_db() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
 
-    // ---------------------------
-    // 1. 테이블 생성
-    // ---------------------------
-    conn.execute(
-        "CREATE TABLE players (
-            id INTEGER PRIMARY KEY,
-            money INTEGER,
-            position INTEGER,
-            lap INTEGER
-        )",
-        [],
-    ).unwrap();
+    init_db(&conn).unwrap(); //매 테스트가 새 DB 생성 후 시작되도록
 
-    conn.execute(
-        "CREATE TABLE tiles (
-            id INTEGER,
-            name TEXT,
-            type TEXT,
-            price INTEGER,
-            toll INTEGER
-        )",
-        [],
-    ).unwrap();
+    conn
+}
+use project::service::event_service::{handle_event, EventResult};
 
-    conn.execute(
-        "CREATE TABLE event_tiles (
-            tile_id INTEGER,
-            event_type TEXT,
-            amount INTEGER
-        )",
-        [],
-    ).unwrap();
+#[test]
+fn test_event_a_welfare_fund() {
+    let conn = setup_test_db();
 
-    conn.execute(
-        "CREATE TABLE fund (
-            amount INTEGER
-        )",
-        [],
-    ).unwrap();
+    // 플레이어 돈 설정
+    conn.execute("UPDATE players SET money = 100 WHERE id = 1", []).unwrap();
 
-    conn.execute(
-        "CREATE TABLE properties (
-            tile_id INTEGER,
-            owner_id INTEGER,
-            price INTEGER
-        )",
-        [],
-    ).unwrap();
+    // tile_id = 6 → 사회복지기금
+    let result = handle_event(&conn, 1, 6);
 
-    conn.execute(
-        "CREATE TABLE transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            player_id INTEGER,
-            type TEXT,
-            amount INTEGER,
-            description TEXT
-        )",
-        [],
-    ).unwrap();
+    match result {
+        EventResult::WelfareFund { amount } => {
+            assert_eq!(amount, 10);
+        }
+        _ => panic!("Expected WelfareFund"),
+    }
+}
 
-    // ---------------------------
-    // 2. 더미 데이터 삽입
-    // ---------------------------
+#[test]
+fn test_event_a_bankrupt() {
+    let conn = setup_test_db();
 
-    // 플레이어
-    conn.execute(
-        "INSERT INTO players VALUES (1, 50, 0, 0)",
-        [],
-    ).unwrap();
+    conn.execute("UPDATE players SET money = 5 WHERE id = 1", []).unwrap();
 
-    // 이벤트 타일 (기금 수령)
-    conn.execute(
-        "INSERT INTO tiles VALUES (1, '기금수령', 'event', 0, 0)",
-        [],
-    ).unwrap();
+    let result = handle_event(&conn, 1, 6);
 
-    conn.execute(
-        "INSERT INTO event_tiles VALUES (1, 'fund_take', 0)",
-        [],
-    ).unwrap();
+    match result {
+        EventResult::WelfareFundBankrupt { paid } => {
+            assert_eq!(paid, 5);
+        }
+        _ => panic!("Expected WelfareFundBankrupt"),
+    }
+}
 
-    // 현재 기금
-    conn.execute(
-        "INSERT INTO fund VALUES (100)",
-        [],
-    ).unwrap();
+#[test]
+fn test_event_c_fund_receive() {
+    let conn = setup_test_db();
 
-    // ---------------------------
-    // 3. TurnInput 구성
-    // ---------------------------
-    let input = TurnInput {
-        player_id: 1,
-        position: 0,
-        lap: 0,
-        money: 50,
-        total_tiles: 10,
+    conn.execute("UPDATE players SET money = 100 WHERE id = 1", []).unwrap();
 
-        tile_price: 0,
-        tile_toll: 0,
-        owner: None,
+    // 기금 50 쌓기
+    conn.execute("UPDATE fund SET amount = 50", []).unwrap();
 
-        will_buy: false,
-        tile_type: "event".to_string(),
-    };
+    // tile_id = 18 → 기금 수령
+    let result = handle_event(&conn, 1, 18);
 
-    // ---------------------------
-    // 4. 턴 실행
-    // ---------------------------
-    let result = process_turn(input, &conn);
+    match result {
+        EventResult::FundReceive { amount } => {
+            assert_eq!(amount, 50);
+        }
+        _ => panic!("Expected FundReceive"),
+    }
+}
 
-    println!("turn result: {:?}", result.action);
+#[test]
+fn test_event_b_estate_tax() {
+    let conn = setup_test_db();
 
-    // ---------------------------
-    // 5. DB 반영
-    // ---------------------------
-    apply_turn_result(&conn, 1, &result).unwrap();
+    conn.execute("UPDATE players SET money = 200 WHERE id = 1", []).unwrap();
 
-    // ---------------------------
-    // 6. 결과 검증
-    // ---------------------------
-    let money: i32 = conn.query_row(
-        "SELECT money FROM players WHERE id = 1",
-        [],
-        |row| row.get(0),
-    ).unwrap();
+    // property 총합 100 이상 되게
+    conn.execute("UPDATE properties SET owner_id = 1 WHERE tile_id = 1", []).unwrap();
 
-    println!("final money: {}", money);
+    let result = handle_event(&conn, 1, 12); // 종부세
 
-    // 기존 50 + 기금 100 = 150 기대
-    assert_eq!(money, 150);
+    match result {
+        EventResult::EstateTax { amount } => {
+            assert_eq!(amount, 30);
+        }
+        _ => panic!("Expected EstateTax"),
+    }
 }
