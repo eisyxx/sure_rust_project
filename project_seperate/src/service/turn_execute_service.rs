@@ -156,6 +156,9 @@ pub fn apply_turn_result(
             bankrupt(conn, player_id)?;
         }
 
+        // 이벤트 C: 기금 없음
+        TurnAction::FundReceiveEmpty => {}
+
         // 이벤트 C: 기금 수령
         TurnAction::EventFundReceive { amount } => {
             use crate::repository::event_repo::reset_fund;

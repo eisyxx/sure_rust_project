@@ -508,6 +508,22 @@ function showTurnMessage(result) {
     messages.push("부동산세금 조건이 충족되지 않았습니다.");
   }
 
+  if (result.action_type === "welfare_fund") {
+    messages.push(`사회복지기금 ${formatMoney(result.action_amount)} 납부`);
+  }
+
+  if (result.action_type === "welfare_fund_bankrupt") {
+    messages.push("잔액이 부족하여 사회복지기금 납부 후 파산하였습니다.");
+  }
+
+  if (result.action_type === "fund_receive") {
+    messages.push(`기금 ${formatMoney(result.action_amount)} 수령`);
+  }
+
+  if (result.action_type === "fund_receive_empty") {
+    messages.push("모여있는 기금이 없습니다.");
+  }
+
   if (messages.length > 0) {
     alert(messages.join("\n"));
   }
