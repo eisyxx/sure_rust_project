@@ -285,6 +285,9 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
         TurnAction::Purchase { price } => ("purchase", *price, None),
         TurnAction::PayToll { owner_id, amount } => ("pay_toll", *amount, Some(*owner_id)),
         TurnAction::Bankrupt { owner_id, paid } => ("bankrupt", *paid, Some(*owner_id)),
+        TurnAction::EventWelfareFund { amount } => {("welfare_fund", *amount, None)},
+        TurnAction::EventWelfareFundBankrupt { paid } => {("welfare_fund_bankrupt", *paid, None)},
+        TurnAction::EventFundReceive { amount } => {("fund_receive", *amount, None)}
         TurnAction::EstateTax { amount } => ("estate_tax", *amount, None),
         TurnAction::EstateTaxSkipped => ("estate_tax_skipped", 0, None),
     };

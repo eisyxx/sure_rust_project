@@ -113,6 +113,69 @@ pub fn apply_turn_result(
             bankrupt(conn, player_id)?;
         }
 
+        // 이벤트 A: 사회복지기금
+        TurnAction::EventWelfareFund { amount } => {
+            use crate::repository::event_repo::add_fund;
+
+            // 돈 차감
+            update_money(conn, player_id, -*amount)?;
+
+            // 기금 증가
+            add_fund(conn, *amount)?;
+
+            // 거래 기록
+            record_transaction(
+                conn,
+                player_id,
+                "withdraw",
+                *amount,
+                "welfare_fund",
+            )?;
+        }
+
+        // 이벤트 A: 파산
+        TurnAction::EventWelfareFundBankrupt { paid } => {
+            use crate::repository::event_repo::add_fund;
+
+            // 가진 돈 전부 기금으로
+            add_fund(conn, *paid)?;
+
+            // 거래 기록
+            record_transaction(
+                conn,
+                player_id,
+                "withdraw",
+                *paid,
+                "welfare_fund_bankrupt",
+            )?;
+
+            // 토지 초기화
+            reset_owner_for_player(conn, player_id)?;
+
+            // 파산 처리
+            bankrupt(conn, player_id)?;
+        }
+
+        // 이벤트 C: 기금 수령
+        TurnAction::EventFundReceive { amount } => {
+            use crate::repository::event_repo::reset_fund;
+
+            // 플레이어 돈 증가
+            update_money(conn, player_id, *amount)?;
+
+            // 거래 기록
+            record_transaction(
+                conn,
+                player_id,
+                "deposit",
+                *amount,
+                "fund_receive",
+            )?;
+
+            // 기금 초기화
+            reset_fund(conn)?;
+        }
+
         TurnAction::None => {}
 
         TurnAction::EstateTaxSkipped => {}

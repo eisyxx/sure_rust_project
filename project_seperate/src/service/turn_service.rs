@@ -6,6 +6,7 @@ use crate::service::{
     buy_property_service::{decide_buy_property, BuyResult},
     event_service::{handle_event, EventResult},
     roll_dice_service::roll_dice,
+    ac_event_service::{handle_event, EventResult},
 };
 use crate::repository::tile_repo::get_tile_info;
 use crate::repository::property_repo::get_owner;
@@ -110,6 +111,9 @@ pub enum TurnAction {
     PayToll { owner_id: i32, amount: i32 },
     Purchase { price: i32 },
     Bankrupt { owner_id: i32, paid: i32 },
+    EventWelfareFund { amount: i32 },
+    EventWelfareFundBankrupt { paid: i32 },
+    EventFundReceive { amount: i32 },
     EstateTax { amount: i32 },
     EstateTaxSkipped,
 }
@@ -145,30 +149,65 @@ pub fn process_turn(input: TurnInput, conn: &Connection) -> TurnResult {
             Err(_) => None,
         };
 
-    // 도착한 타일에서의 행동 결정 (이벤트 / 구매 / 통행료 / 파산 등)
-    let action = if tile_type == "event" {
-        match handle_event(conn, input.player_id, move_result.new_position) {
-            EventResult::EstateTax { amount } => TurnAction::EstateTax { amount },
-            EventResult::EstateTaxSkipped => TurnAction::EstateTaxSkipped,
-            EventResult::None => TurnAction::None,
+    let mut action = TurnAction::None;
+
+    // 이벤트 처리
+    if tile_type == "event" {
+        let event_result = handle_event(
+            conn,
+            input.player_id,
+            move_result.new_position,
+        );
+
+        match event_result {
+            EventResult::WelfareFund { amount } => {
+                action = TurnAction::EventWelfareFund { amount };
+            }
+            EventResult::WelfareFundBankrupt { paid } => {
+                action = TurnAction::EventWelfareFundBankrupt { paid };
+            }
+            EventResult::FundReceive { amount } => {
+            action = TurnAction::EventFundReceive { amount };
+            }
+            EventResult::None => {}
         }
-    } else {
+    } 
+    else {
+        // 도착한 타일에서의 행동 결정 (구매 / 통행료 / 파산 등)
         let buy_result = decide_buy_property(
             input.player_id,
             input.money + salary,
-            tile_price,
-            tile_toll,
-            tile_owner,
+            tile_price,    // 이전 input.tile_price → DB 기반 tile_price 사용
+            tile_toll,     // 이전 input.tile_toll → DB 기반 tile_toll 사용
+            tile_owner,    // 이전 input.owner → DB 기반 tile_owner 사용
             input.will_buy,
-            tile_type.clone(),
+            tile_type.clone(), // DB 기반 tile_type 사용
         );
+
+        // 행동 결정
         match buy_result {
-            BuyResult::PayToll { owner_id, amount } => TurnAction::PayToll { owner_id, amount },
-            BuyResult::Bankrupt { owner_id, paid } => TurnAction::Bankrupt { owner_id, paid },
-            BuyResult::Purchase { price } => TurnAction::Purchase { price },
-            BuyResult::NotEnoughMoney | BuyResult::Skip => TurnAction::None,
+            // 통행료 지불
+            BuyResult::PayToll { owner_id, amount } => {
+                action = TurnAction::PayToll { owner_id, amount };
+            }
+
+            // 파산 처리
+            BuyResult::Bankrupt { owner_id, paid } => {
+                action = TurnAction::Bankrupt { owner_id, paid };
+            }
+
+            // 타일 구매
+            BuyResult::Purchase { price } => {
+                action = TurnAction::Purchase { price };
+            }
+
+            // 돈 부족으로 아무 행동도 못함
+            BuyResult::NotEnoughMoney => {}
+
+            // 구매하지 않기로 선택
+            BuyResult::Skip => {}
         }
-    };
+    }
 
     // 최종 턴 결과 반환
     TurnResult {
