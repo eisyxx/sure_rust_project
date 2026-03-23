@@ -70,21 +70,32 @@ pub fn build_turn_result(
     will_buy: bool,
     tile_type: &str,
 ) -> TurnResult {
-    let buy_result = decide_buy_property(
-        player_id,
-        money_after_salary,
-        tile_price,
-        tile_toll,
-        tile_owner,
-        will_buy,
-        tile_type.to_string(),
-    );
-
-    let action = match buy_result {
-        BuyResult::PayToll { owner_id, amount } => { TurnAction::PayToll { owner_id, amount } }
-        BuyResult::Bankrupt { owner_id, paid } => { TurnAction::Bankrupt { owner_id, paid } }
-        BuyResult::Purchase { price } => { TurnAction::Purchase { price } }
-        BuyResult::NotEnoughMoney | BuyResult::Skip => { TurnAction::None }
+    let action = if tile_type == "event" {
+        match handle_event(conn, player_id, move_step.new_position) {
+            EventResult::WelfareFund { amount } => TurnAction::EventWelfareFund { amount },
+            EventResult::WelfareFundBankrupt { paid } => TurnAction::EventWelfareFundBankrupt { paid },
+            EventResult::EstateTax { amount } => TurnAction::EstateTax { amount },
+            EventResult::EstateTaxSkipped => TurnAction::EstateTaxSkipped,
+            EventResult::FundReceive { amount } => TurnAction::EventFundReceive { amount },
+            EventResult::FundReceiveEmpty => TurnAction::FundReceiveEmpty,
+            EventResult::None => TurnAction::None,
+        }
+    } else {
+        let buy_result = decide_buy_property(
+            player_id,
+            money_after_salary,
+            tile_price,
+            tile_toll,
+            tile_owner,
+            will_buy,
+            tile_type.to_string(),
+        );
+        match buy_result {
+            BuyResult::PayToll { owner_id, amount } => TurnAction::PayToll { owner_id, amount },
+            BuyResult::Bankrupt { owner_id, paid } => TurnAction::Bankrupt { owner_id, paid },
+            BuyResult::Purchase { price } => TurnAction::Purchase { price },
+            BuyResult::NotEnoughMoney | BuyResult::Skip => TurnAction::None,
+        }
     };
 
     TurnResult {
@@ -106,6 +117,7 @@ pub enum TurnAction {
     EventWelfareFund { amount: i32 },
     EventWelfareFundBankrupt { paid: i32 },
     EventFundReceive { amount: i32 },
+    FundReceiveEmpty,
     EstateTax { amount: i32 },
     EstateTaxSkipped,
 }
@@ -159,7 +171,10 @@ pub fn process_turn(input: TurnInput, conn: &Connection) -> TurnResult {
                 action = TurnAction::EventWelfareFundBankrupt { paid };
             }
             EventResult::FundReceive { amount } => {
-            action = TurnAction::EventFundReceive { amount };
+                action = TurnAction::EventFundReceive { amount };
+            }
+            EventResult::FundReceiveEmpty => {
+                action = TurnAction::FundReceiveEmpty;
             }
             EventResult::EstateTax { amount } => {
                 action = TurnAction::EstateTax { amount };

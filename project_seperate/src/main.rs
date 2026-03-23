@@ -165,6 +165,8 @@ async fn main() -> std::io::Result<()> {
     });
 
     //HTTP 서버 설정
+    let port = std::env::var("PORT").unwrap_or("8080".to_string());
+
     HttpServer::new(move || {
         App::new()
             .app_data(app_state.clone())
@@ -177,7 +179,8 @@ async fn main() -> std::io::Result<()> {
             .service(player_transactions)
                 .service(Files::new("/assets", frontend_path("assets")))
     })
-    .bind("127.0.0.1:8080")?
+    .bind(format!("0.0.0.0:{}", port))?
+    // .bind("127.0.0.1:8080")?
     .run()
     .await
 }
