@@ -262,6 +262,7 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
     let player_id = current_player.id;
 
     let turn_result = build_turn_result(
+        conn,
         move_step,
         player_id,
         money_after_salary,
@@ -284,6 +285,8 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
         TurnAction::Purchase { price } => ("purchase", *price, None),
         TurnAction::PayToll { owner_id, amount } => ("pay_toll", *amount, Some(*owner_id)),
         TurnAction::Bankrupt { owner_id, paid } => ("bankrupt", *paid, Some(*owner_id)),
+        TurnAction::EstateTax { amount } => ("estate_tax", *amount, None),
+        TurnAction::EstateTaxSkipped => ("estate_tax_skipped", 0, None),
     };
 
     Ok(ApiTurnResponse {
