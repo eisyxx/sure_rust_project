@@ -14,6 +14,7 @@ pub enum EventResult {
     EstateTax { amount: i32 },
     EstateTaxSkipped,
     FundReceive { amount: i32 },
+    FundReceiveEmpty,
     None,
 }
 
@@ -66,7 +67,7 @@ pub fn handle_event(
             if fund_amount > 0 {
                 EventResult::FundReceive { amount: fund_amount }
             } else {
-                EventResult::None
+                EventResult::FundReceiveEmpty
             }
         }
 
