@@ -10,6 +10,7 @@ const modal = document.getElementById("accountModal");
 const closeModal = document.getElementById("closeModal");
 const transactionBody = document.getElementById("transactionBody");
 
+// 게임 변수 초기화
 const size = 7;
 const players = [];
 const path = createPath(size);
@@ -27,11 +28,13 @@ let isAnimating = false;
 let pendingDecideResult = null;
 let pendingTurnResult = null;
 
+// 초기 보드 생성 및 UI 초기화
 buildBoard();
 hideUnusedButtons();
 bindEvents();
 initGame();
 
+// 보드 타일 생성
 function buildBoard() {
   for (let row = 0; row < size; row += 1) {
     for (let col = 0; col < size; col += 1) {
@@ -51,6 +54,7 @@ function buildBoard() {
   }
 }
 
+// 보드 경로 배열 생성
 function createPath(boardSize) {
   const boardPath = [];
 
@@ -62,6 +66,7 @@ function createPath(boardSize) {
   return boardPath;
 }
 
+// 사용하지 않는 버튼 초기 상태 숨김 처리
 function hideUnusedButtons() {
   buyBtn.style.display = "";
   buyBtn.disabled = true;
@@ -70,8 +75,10 @@ function hideUnusedButtons() {
   confirmBtn.disabled = true;
 }
 
+// 이벤트 바인딩
 function bindEvents() {
-  rollBtn.onclick = async () => {
+  // 주사위 굴리기
+  rollBtn.onclick = async () => {  
     if (isAnimating || gameFinished) {
       return;
     }
@@ -114,7 +121,8 @@ function bindEvents() {
     }
   };
 
-  buyBtn.onclick = async () => {
+   // 토지 구매 버튼
+  buyBtn.onclick = async () => { 
     buyBtn.disabled = true;
 
     try {
@@ -158,7 +166,8 @@ function bindEvents() {
     }
   };
 
-  confirmBtn.onclick = async () => {
+  // 확인 버튼
+  confirmBtn.onclick = async () => {  
     if (pendingDecideResult !== null) {
       // 구매 후 확인 → 턴 마무리만 (알림은 구매 시 이미 표시됨)
       applyState(pendingDecideResult);
@@ -187,6 +196,7 @@ function bindEvents() {
     }
   };
 
+  //거래 내역 열기
   accountBtn.onclick = async () => {
     if (!currentPlayerId) {
       return;
@@ -201,6 +211,7 @@ function bindEvents() {
   };
 }
 
+// 구매 결정 알림
 function showBuyDecision(price) {
   alert(`이 땅의 가격은 ${formatMoney(price)}입니다. 구매하려면 '토지 구매', 넘어가려면 '확인'을 누르세요.`);
   buyBtn.disabled = false;
@@ -237,6 +248,7 @@ async function sendDecide(willBuy) {
   }
 }
 
+// 초기 게임 상태 조회
 async function initGame() {
   try {
     const response = await fetch("/api/state");
@@ -254,6 +266,7 @@ async function initGame() {
   }
 }
 
+// 서버 상태를 클라이언트에 적용
 function applyState(state) {
   syncPlayers(state.players);
   currentPlayerId = state.current_player_id;
@@ -273,6 +286,7 @@ function applyState(state) {
   }
 }
 
+// 서버 플레이어 정보와 로컬 플레이어 동기화
 function syncPlayers(serverPlayers) {
   players.length = 0;
 
@@ -291,6 +305,7 @@ function syncPlayers(serverPlayers) {
   });
 }
 
+// 플레이어 라벨 업데이트
 function updatePlayerLabel(playerId, name, money, isBankrupt) {
   const label = document.querySelector(`.p${playerId}`);
 
@@ -306,12 +321,14 @@ function updatePlayerLabel(playerId, name, money, isBankrupt) {
   }
 }
 
+// 플레이어 말 렌더링
 function renderPlayers() {
   players.forEach((player) => {
     moveMarker(player.id, player.position);
   });
 }
 
+// 타일 소유자 색상 렌더링
 function renderTileOwners(tileOwners) {
   const ownerByTile = new Map();
 
@@ -332,6 +349,7 @@ function renderTileOwners(tileOwners) {
   }
 }
 
+// 플레이어 말 이동
 function moveMarker(playerId, position) {
   const marker = document.querySelector(`.player${playerId}`);
   const [row, col] = path[position];
@@ -345,6 +363,7 @@ function moveMarker(playerId, position) {
   arrangeMarkersInCell(row, col);
 }
 
+// 한 셀 내 말 위치 조정 (말 겹침 방지)
 function arrangeMarkersInCell(row, col) {
   const cell = document.querySelector(`.tile[data-row="${row}"][data-col="${col}"]`);
 
@@ -376,6 +395,7 @@ function arrangeMarkersInCell(row, col) {
   });
 }
 
+// 현재 턴 UI 표시
 function updateTurnUI() {
   const playerEls = document.querySelectorAll(".player");
 
@@ -390,6 +410,7 @@ function updateTurnUI() {
   });
 }
 
+// 잔액 UI 업데이트
 function updateBalance() {
   const currentPlayer = players.find((player) => player.id === currentPlayerId) || players[0];
 
@@ -401,6 +422,7 @@ function updateBalance() {
   balanceEl.textContent = `잔액: ${formatMoney(currentPlayer.money)}`;
 }
 
+// 턴 이동 애니메이션
 async function animateTurn(playerId, dice) {
   const player = players.find((entry) => entry.id === playerId);
 
@@ -419,6 +441,7 @@ async function animateTurn(playerId, dice) {
   isAnimating = false;
 }
 
+// 거래 내역 조회 후 테이블 표시
 async function loadTransactions(playerId) {
   transactionBody.innerHTML = "";
 
@@ -457,6 +480,7 @@ async function loadTransactions(playerId) {
   }
 }
 
+// 턴 메세지 표시 (월급, 구매, 통행료, 파산)
 function showTurnMessage(result) {
   const messages = [];
 
@@ -481,6 +505,7 @@ function showTurnMessage(result) {
   }
 }
 
+// 현재 플레이어 잔액 업데이트
 function updateCurrentPlayerBalanceFromTurnResult(result) {
   const updatedPlayer = result.players?.find((player) => player.id === result.player_id);
 
@@ -498,6 +523,7 @@ function updateCurrentPlayerBalanceFromTurnResult(result) {
   updateBalance();
 }
 
+// 금액 포멧팅
 function formatMoney(amount) {
   const numericAmount = Number(amount);
 
@@ -508,6 +534,7 @@ function formatMoney(amount) {
   return `${numericAmount.toLocaleString()}만원`;
 }
 
+// 거래 타입 포맷팅
 function formatTransactionType(txType) {
   if (txType === "deposit") {
     return "입금";
@@ -520,6 +547,7 @@ function formatTransactionType(txType) {
   return txType;
 }
 
+// 일정 시간 대기
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

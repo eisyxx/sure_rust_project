@@ -24,6 +24,7 @@ pub struct PendingTurn {
     pub money_after_salary: i32,
 }
 
+// 세션 상태 (현재 턴, 게임 종료 여부, 승자, 대기 중인 구매 결정)
 pub struct SessionState {
     pub current_turn_index: usize,
     pub game_finished: bool,
@@ -31,6 +32,7 @@ pub struct SessionState {
     pub pending: Option<PendingTurn>,
 }
 
+// API로 반환할 플레이어 정보
 #[derive(Serialize)]
 pub struct ApiPlayer {
     pub id: i32,
@@ -42,6 +44,7 @@ pub struct ApiPlayer {
     pub is_bankrupt: bool,
 }
 
+// API로 반환할 거래 내역 정보
 #[derive(Serialize)]
 pub struct ApiTransaction {
     pub id: i32,
@@ -53,6 +56,7 @@ pub struct ApiTransaction {
     pub created_at: String,
 }
 
+// API로 반환할 토지 소유 정보
 #[derive(Serialize)]
 pub struct ApiTileOwner {
     pub tile_id: i32,
@@ -68,6 +72,7 @@ pub struct ApiStateResponse {
     pub winner_id: Option<i32>,
 }
 
+// API 상태 응답
 #[derive(Serialize)]
 pub struct ApiTurnResponse {
     pub player_id: i32,
@@ -87,10 +92,12 @@ pub struct ApiTurnResponse {
     pub winner_id: Option<i32>,
 }
 
+// 파산하지 않은 플레이어만 필터링하여 변환
 fn active_players(players: &[PlayerState]) -> Vec<&PlayerState> {
     players.iter().filter(|player| !player.is_bankrupt).collect()
 }
 
+// 현재 턴 인덱스를 기준으로 실제 플레이어 ID 반환
 fn current_player_id(players: &[PlayerState], current_turn_index: usize) -> Option<i32> {
     let active = active_players(players);
 
@@ -102,6 +109,7 @@ fn current_player_id(players: &[PlayerState], current_turn_index: usize) -> Opti
     Some(active[normalized_index].id)
 }
 
+// 내부 playerstate -> API 응답용 apiplayer로 변환
 fn map_players(players: Vec<PlayerState>) -> Vec<ApiPlayer> {
     players
         .into_iter()
@@ -117,6 +125,7 @@ fn map_players(players: Vec<PlayerState>) -> Vec<ApiPlayer> {
         .collect()
 }
 
+// DB에서 타일 소유 정보를 조회하여 API 응답 형태로 변환
 fn map_tile_owners(conn: &Connection) -> rusqlite::Result<Vec<ApiTileOwner>> {
     let records = get_owned_tiles(conn)?;
 
@@ -129,6 +138,7 @@ fn map_tile_owners(conn: &Connection) -> rusqlite::Result<Vec<ApiTileOwner>> {
         .collect())
 }
 
+// 현재 게임 상태 조회
 pub fn get_state(conn: &Connection, session: &SessionState) -> rusqlite::Result<ApiStateResponse> {
     let players = get_player_states(conn)?;
     let current_player_id = current_player_id(&players, session.current_turn_index);
@@ -143,6 +153,7 @@ pub fn get_state(conn: &Connection, session: &SessionState) -> rusqlite::Result<
     })
 }
 
+// 특정 플레이어의 거래 내역 조회 -> API 응답 형태로 변환
 pub fn get_transactions(conn: &Connection, player_id: i32) -> rusqlite::Result<Vec<ApiTransaction>> {
     let transactions = get_transactions_by_player(conn, player_id)?;
 
@@ -160,6 +171,7 @@ pub fn get_transactions(conn: &Connection, player_id: i32) -> rusqlite::Result<V
         .collect())
 }
 
+// 한 턴 진행
 pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::Result<ApiTurnResponse> {
     let players = get_all_players(conn)?
         .into_iter()
@@ -293,7 +305,7 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
     })
 }
 
-/// 구매 결정을 처리하고 턴을 완료한다
+/// 구매 결정을 처리하고 턴을 완료
 pub fn handle_decide(
     conn: &Connection,
     session: &mut SessionState,
@@ -341,6 +353,7 @@ pub fn handle_decide(
     })
 }
 
+//다음 턴으로 진행 및 게임 종료 여부 판단
 fn advance_turn(
     conn: &Connection,
     session: &mut SessionState,

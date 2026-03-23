@@ -8,13 +8,14 @@ use crate::repository::{
 
 use crate::service::turn_service::{TurnResult, TurnAction};
 
+// process_turn 함수 실행 결과를 DB에 반영하는 함수
 pub fn apply_turn_result(
     conn: &Connection,
     player_id: i32,
     result: &TurnResult,
 ) -> rusqlite::Result<()> {
 
-    // 1. 위치 + lap
+    // 위치 + lap(바퀴 수) 업데이트
     update_position_and_lap(
         conn,
         player_id,
@@ -22,7 +23,7 @@ pub fn apply_turn_result(
         result.new_lap,
     )?;
 
-    // 2. 월급 처리 (입금)
+    // 월급 처리 (입금 후 내역 기록)
     if result.salary > 0 {
         update_money(conn, player_id, result.salary)?;
 
@@ -35,10 +36,10 @@ pub fn apply_turn_result(
         )?;
     }
 
-    // 3. 액션 처리
+    // 액션 처리
     match &result.action {
 
-        // 구매
+        // 토지 구매
         TurnAction::Purchase { price } => {
             update_money(conn, player_id, -*price)?;
 
@@ -58,7 +59,7 @@ pub fn apply_turn_result(
             )?;
         }
 
-        // 통행료
+        // 통행료 지급
         TurnAction::PayToll { owner_id, amount } => {
             // 잔액 출금
             update_money(conn, player_id, -*amount)?;
@@ -83,7 +84,7 @@ pub fn apply_turn_result(
 
         // 파산
         TurnAction::Bankrupt { owner_id, paid } => {
-            // 가진 돈 전부 토지 소유자에게 지급
+            // 잔액을 전부 토지 소유자에게 지급
             update_money(conn, *owner_id, *paid)?;
             record_transaction(
                 conn,
@@ -93,7 +94,7 @@ pub fn apply_turn_result(
                 &format!("bankrupt_from_{}", player_id),
             )?;
 
-            // 내 출금 기록
+            // 출금 내역 기록
             record_transaction(
                 conn,
                 player_id,
@@ -105,6 +106,7 @@ pub fn apply_turn_result(
             // 소유했던 토지 초기화
             reset_owner_for_player(conn, player_id)?;
 
+            // 파산 처리
             bankrupt(conn, player_id)?;
         }
 

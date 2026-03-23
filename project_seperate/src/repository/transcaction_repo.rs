@@ -1,5 +1,6 @@
 use rusqlite::{Connection, Result};
 
+// 플레이어의 거래 내역을 나타내는 구조체
 #[derive(Clone)]
 pub struct TransactionRecord {
     pub id: i32,
@@ -11,6 +12,7 @@ pub struct TransactionRecord {
     pub created_at: String,
 }
 
+// 지정 플레이어의 거래 내역을 DB에 기록
 pub fn record_transaction(
     conn: &Connection,
     player_id: i32,
@@ -44,6 +46,7 @@ pub fn record_transaction(
     Ok(())
 }
 
+// 지정 플레이어의 거래 내역 조회
 pub fn get_transactions_by_player(conn: &Connection, player_id: i32) -> Result<Vec<TransactionRecord>> {
     let mut stmt = conn.prepare(
         "SELECT id,

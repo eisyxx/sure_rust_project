@@ -1,6 +1,8 @@
 use rusqlite::{Connection, Result};
 
+// 토지 정보 생성 및 초기화
 pub fn init_tiles(conn: &Connection) -> Result<()> {
+    
     // 시작점 타일을 DB에 추가
     conn.execute(
         "INSERT INTO tiles (id, name, type, price, toll)
@@ -8,7 +10,7 @@ pub fn init_tiles(conn: &Connection) -> Result<()> {
         [],
     )?;
 
-    // 토지 및 이벤트 순서대로 price와 toll
+    // 토지 및 이벤트 정보 벡터 생성
     let tile_data = vec![
         // (id, price, name, toll)
         (1, 5, "101", 3),
@@ -36,6 +38,7 @@ pub fn init_tiles(conn: &Connection) -> Result<()> {
         (23, 300, "405", 180),
     ];
 
+    // 토지, 이벤트 구분하여 properties, event 테이블에 각각 삽입
     for (id, price, name, toll) in tile_data {
         if price == 0 {
             // 이벤트 칸
@@ -61,7 +64,7 @@ fn insert_property(conn: &Connection, id: i32, price: i32, name: &str, toll: i32
     conn.execute(
         "INSERT INTO properties (tile_id, owner_id, price)
          VALUES (?1, NULL, ?2)",
-        (id, price),
+        (id, price),    // 소유자 정보는 기본 NULL로 설정
     )?;
 
     Ok(())

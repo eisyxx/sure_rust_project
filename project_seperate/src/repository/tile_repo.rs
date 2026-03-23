@@ -1,5 +1,6 @@
 use rusqlite::Connection;
 
+// 지정 토지의 정보를 불러오기
 pub fn get_tile_info(
     conn: &Connection,
     tile_id: i32,

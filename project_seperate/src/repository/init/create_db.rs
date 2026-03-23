@@ -96,6 +96,7 @@ pub fn create_db(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+// 기존 DB와의 호환을 위한 마이그레이션 처리 (transactions 테이블에 balance_before/after 컬럼이 없으면 추가)
 fn ensure_transactions_balance_columns(conn: &Connection) -> Result<()> {
     let mut stmt = conn.prepare("PRAGMA table_info(transactions)")?;
     let mut rows = stmt.query([])?;
