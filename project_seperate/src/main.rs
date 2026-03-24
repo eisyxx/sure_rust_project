@@ -297,8 +297,8 @@ async fn main() -> std::io::Result<()> {
                 .service(Files::new("/assets", frontend_path("assets")))
             .service(Files::new("/", frontend_path("")).index_file("index.html"))
     })
-    //.bind(format!("0.0.0.0:{}", port))?
-     .bind("127.0.0.1:8080")?
+    .bind(format!("0.0.0.0:{}", port))?
+    // .bind("127.0.0.1:8080")?
     .run()
     .await
 }
