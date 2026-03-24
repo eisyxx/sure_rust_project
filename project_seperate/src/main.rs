@@ -257,6 +257,33 @@ async fn game_result(data: web::Data<AppState>) -> HttpResponse {
     HttpResponse::Ok().json(frontend_players)
 }
 
+// 게임 재시작
+#[post("/api/reset")]
+async fn reset_game(data: web::Data<AppState>) -> HttpResponse {
+    let mut session = match data.session.lock() {
+        Ok(s) => s,
+        Err(_) => return HttpResponse::InternalServerError().body("세션 잠금 실패"),
+    };
+
+    let conn = match data.conn.lock() {
+        Ok(c) => c,
+        Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
+    };
+
+    // DB 초기화
+    if let Err(e) = repository::init::init_db::init_db(&conn) {
+        return HttpResponse::InternalServerError().body(e.to_string());
+    }
+
+    // 세션 초기화
+    session.current_turn_index = 0;
+    session.game_finished = false;
+    session.winner_id = None;
+    session.pending = None;
+    session.final_rankings = None;
+
+    HttpResponse::Ok().body("reset success")
+}
 
 // 서버 실행
 #[actix_web::main]
@@ -290,6 +317,7 @@ async fn main() -> std::io::Result<()> {
             .service(stylesheet)
             .service(game_state)
             .service(result_page)
+            .service(reset_game)
             .service(turn_api)
             .service(decide_api)
             .service(player_transactions)
@@ -297,8 +325,8 @@ async fn main() -> std::io::Result<()> {
                 .service(Files::new("/assets", frontend_path("assets")))
             .service(Files::new("/", frontend_path("")).index_file("index.html"))
     })
-    .bind(format!("0.0.0.0:{}", port))?
-    // .bind("127.0.0.1:8080")?
+    // .bind(format!("0.0.0.0:{}", port))?
+    .bind("127.0.0.1:8080")?
     .run()
     .await
 }

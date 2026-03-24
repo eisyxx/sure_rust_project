@@ -178,7 +178,7 @@ function bindEvents() {
   // 확인 버튼
   confirmBtn.onclick = async () => {  
     if (pendingTurnResult?.game_finished) {
-      window.location.href = `/result.html?winner=${pendingTurnResult.winner_id}`;
+      window.location.href = `/result`;
     }
     if (pendingDecideResult !== null) {
       // 구매 후 확인 → 턴 마무리만 (알림은 구매 시 이미 표시됨)
