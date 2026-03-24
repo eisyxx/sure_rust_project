@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>게임 결과</title>
+  <style>
+    body {
+      font-family: Arial;
+      background-color: #f7f7f7;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .ranking-container {
+      width: 520px;
+      min-height: 600px;
+      background: #fff;
+      padding: 30px;
+      padding-top: 50px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .title {
+      text-align: center;
+      font-size: 30px;
+      font-weight: bold;
+      margin-top: 20px;
+      margin-bottom: 60px;
+    }
+
+    /* 🥇 1위 */
+    .first-place-card {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      margin-bottom: 30px;
+      border: 3px solid gold;
+      border-radius: 16px;
+      background: #fff8dc;
+    }
+
+    .first-place-card img {
+      width: 90px;
+      height: 100px;
+      border-radius: 50%;
+      margin-right: 20px;
+    }
+
+    .first-place-card .rank {
+      font-size: 20px;
+      font-weight: bold;
+      margin-right: 20px;
+    }
+
+    /* 🥈🥉 */
+    .other-player {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+      padding: 12px 30px;
+      border-radius: 10px;
+      background: #f0f0f0;
+    }
+
+    .other-player img {
+      width: 45px;
+      height: 50px;
+      border-radius: 50%;
+      margin-right: 12px;
+    }
+
+    .player-info {
+      flex-grow: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .player-name {
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .player-score {
+      font-size: 18px;
+    }
+
+    .rank {
+      font-size: 18px;
+      font-weight: bold;
+      margin-right: 20px;
+    }
+
+    .bankrupt img {
+      filter: grayscale(100%);
+    }
+
+    .second { border: 2px solid silver; }
+    .third { border: 2px solid #c2803f; }
+  </style>
+</head>
+
+<body>
+  <div class="ranking-container">
+    <div class="title">🏆 게임 결과 🏆</div>
+
+    <div id="first-place"></div>
+    <div id="other-places"></div>
+  </div>
+
+  <script>
+    async function loadResult() {
+      try {
+        const res = await fetch("/api/result");
+
+        if (!res.ok) {
+          throw new Error("결과 조회 실패");
+        }
+
+        let players = await res.json();
+
+        // 정렬 (rank 없는 건 뒤로)
+        players.sort((a, b) => {
+          if (a.rank === null) return 1;
+          if (b.rank === null) return -1;
+          return a.rank - b.rank;
+        });
+
+        render(players);
+
+      } catch (err) {
+        console.error(err);
+        alert("결과를 불러올 수 없습니다.");
+      }
+    }
+
+    function render(players) {
+      const firstContainer = document.getElementById("first-place");
+      const otherContainer = document.getElementById("other-places");
+
+      firstContainer.innerHTML = "";
+      otherContainer.innerHTML = "";
+
+      players.forEach(p => {
+        const rankText = p.rank ? `${p.rank}위` : "파산";
+
+        // 🥇 1위
+        if (p.rank === 1) {
+          const div = document.createElement("div");
+          div.className = "first-place-card";
+
+          div.innerHTML = `
+            <div class="rank">1위</div>
+            <img src="/assets/player${p.id}_icon.png" alt="${p.name}">
+            <div>
+              <div style="font-size:24px; font-weight:bold;">👑 ${p.name}</div>
+              <div style="font-size:20px;">
+                ${p.is_bankrupt ? "파산" : "💰 " + p.money + "만원"}
+              </div>
+            </div>
+          `;
+
+          firstContainer.appendChild(div);
+        }
+
+        //나머지
+        else {
+          const div = document.createElement("div");
+          div.className = "other-player";
+
+          if (p.is_bankrupt) div.classList.add("bankrupt");
+          else if (p.rank === 2) div.classList.add("second");
+          else if (p.rank === 3) div.classList.add("third");
+
+          div.innerHTML = `
+            <div class="rank">${rankText}</div>
+            <img src="/assets/player${p.id}_icon.png" alt="${p.name}">
+            <div class="player-info">
+              <div class="player-name">${p.name}</div>
+              <div class="player-score">
+                ${p.is_bankrupt ? "파산" : "💰 " + p.money + "만원"}
+              </div>
+            </div>
+          `;
+
+          otherContainer.appendChild(div);
+        }
+      });
+    }
+
+    loadResult();
+  </script>
+</body>
+</html>

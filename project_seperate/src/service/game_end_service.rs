@@ -49,19 +49,23 @@ pub fn check_game_end(players: Vec<Player>) -> GameResult {
         };
     }
 
-    active_players.sort_by(|a, b| b.money.cmp(&a.money));
-
-    // 우승자 결정
-    let winner_id = active_players.first().map(|p| p.id);
-
-    // 최종 랭킹 생성
-    let rankings = active_players
+    // 랭킹 생성: 파산자 마지막으로 보내기
+    let mut rankings: Vec<(i32, i32)> = players
         .iter()
-        .map(|p| (p.id, p.money))
+        .map(|p| (p.id, if p.is_bankrupt { -1 } else { p.money })) // 파산자는 -1로 처리
         .collect();
 
+    // 돈 기준 내림차순 정렬 (파산자는 -1 → 맨 뒤)
+    rankings.sort_by(|a, b| b.1.cmp(&a.1));
+
+    // 우승자: 가장 높은 돈 가진 생존 플레이어
+    let winner_id = rankings
+        .iter()
+        .find(|(id, money)| *money != -1)
+        .map(|(id, _)| *id);
+
     GameResult {
-        is_finished: true,
+        is_finished: finished,
         winner_id,
         rankings,
     }
