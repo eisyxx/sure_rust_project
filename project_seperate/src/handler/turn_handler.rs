@@ -30,6 +30,8 @@ pub struct SessionState {
     pub game_finished: bool,
     pub winner_id: Option<i32>,
     pub pending: Option<PendingTurn>,
+    pub final_rankings: Option<Vec<(i32, i32)>>,
+    pub players: Vec<GamePlayer>,
 }
 
 // API로 반환할 플레이어 정보
@@ -406,20 +408,28 @@ fn advance_turn(
             }
         }
         
-        // 최신 잔액으로 최종 순위 계산
-        let final_players = get_player_states(conn)?
+        let all_players_after_reward = get_player_states(conn)?
             .into_iter()
-            .filter(|p| !p.is_bankrupt)
+            .map(|p| (p.id, p.money))  
             .collect::<Vec<_>>();
-        
-        let mut final_sorted = final_players.clone();
-        final_sorted.sort_by(|a, b| b.money.cmp(&a.money));
-        
-        // 우승자 결정
-        session.winner_id = final_sorted.first().map(|p| p.id);
-    } else {
+
+        let mut final_rankings = all_players_after_reward.clone();
+        final_rankings.sort_by(|a, b| b.1.cmp(&a.1)); // 돈 많은 순 정렬
+
+        // 세션에 저장
+        session.winner_id = final_rankings
+            .iter()
+            .find(|(_, money)| *money != -1)
+            .map(|(id, _)| *id);
+
+        // 세션에 랭킹 추가 (프론트에서 표시 가능하도록)
+        session.final_rankings = Some(final_rankings);
+    }
+    else {
+        // 다음 턴
         session.current_turn_index += 1;
         session.winner_id = None;
+        session.final_rankings = None;
     }
 
     Ok(())
