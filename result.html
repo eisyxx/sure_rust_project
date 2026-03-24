@@ -6,7 +6,7 @@
   <style>
     body {
       font-family: Arial;
-      background-color: #f7f7f7;
+      background-color: #ddd;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -64,7 +64,8 @@
       margin-bottom: 15px;
       padding: 12px 30px;
       border-radius: 10px;
-      background: #f0f0f0;
+      background: #ffffff;
+      border: 2px solid rgb(228, 228, 228);
     }
 
     .other-player img {
@@ -96,12 +97,11 @@
       margin-right: 20px;
     }
 
-    .bankrupt img {
-      filter: grayscale(100%);
-    }
+    .bankrupt img {filter: grayscale(100%);}
+    .bankrupt {border: none !important;}
 
-    .second { border: 2px solid silver; }
-    .third { border: 2px solid #c2803f; }
+    .second { border: 2px solid silver;  background-color: rgb(245, 245, 245);}
+    .third { border: 2px solid #c2803f; background-color: #ebded1;}
   </style>
 </head>
 
@@ -192,7 +192,6 @@
         }
       });
     }
-
     loadResult();
   </script>
 </body>
