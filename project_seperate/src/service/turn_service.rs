@@ -5,7 +5,7 @@ use crate::service::{
     salary_service::calculate_salary,
     buy_property_service::{decide_buy_property, BuyResult},
     roll_dice_service::roll_dice,
-    event_service::{handle_event, EventResult},
+    event_service::{handle_event_with_conn, EventResult},
 };
 use crate::repository::tile_repo::get_tile_info;
 use crate::repository::property_repo::get_owner;
@@ -71,7 +71,7 @@ pub fn build_turn_result(
     tile_type: &str,
 ) -> TurnResult {
     let action = if tile_type == "event" {
-        match handle_event(conn, player_id, move_step.new_position) {
+        match handle_event_with_conn(conn, player_id, move_step.new_position) {
             EventResult::WelfareFund { amount } => TurnAction::EventWelfareFund { amount },
             EventResult::WelfareFundBankrupt { paid } => TurnAction::EventWelfareFundBankrupt { paid },
             EventResult::EstateTax { amount } => TurnAction::EstateTax { amount },
@@ -159,7 +159,7 @@ pub fn process_turn(input: TurnInput, conn: &Connection) -> TurnResult {
 
     // 이벤트 처리
     if tile_type == "event" {
-        let event_result = handle_event(
+        let event_result = handle_event_with_conn(
             conn,
             input.player_id,
             move_result.new_position,

@@ -9,3 +9,6 @@ actix-web = "4"
 rusqlite = { version = "0.39", features = ["bundled"] }
 rand = "0.8"
 serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+mockall = "0.12"
