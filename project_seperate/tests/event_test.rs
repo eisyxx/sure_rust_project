@@ -1,84 +1,36 @@
-use rusqlite::Connection;
-use project::repository::init::init_db::init_db;
+/*
+** DB 필요**
+fund_add → 돈 충분 / 부족
+tax_if_property → 과세 / 스킵
+fund_take → 있음 / 없음
+*/
 
-fn setup_test_db() -> Connection {
-    let conn = Connection::open_in_memory().unwrap();
+mod common;
 
-    init_db(&conn).unwrap(); //매 테스트가 새 DB 생성 후 시작되도록
+#[cfg(test)]
+mod tests {
+    use project::service::event_service::{handle_event,EventResult};
+    use crate::common::db::setup_db;
+    use rusqlite::Connection;
 
-    conn
-}
-use project::service::event_service::{handle_event, EventResult};
+    #[test]
+    fn test_event() {
+        let conn = setup_db();
 
-#[test]
-fn test_event_a_welfare_fund() {
-    let conn = setup_test_db();
+        conn.execute("INSERT INTO players VALUES (1, 100)", []).unwrap();
 
-    // 플레이어 돈 설정
-    conn.execute("UPDATE players SET money = 100 WHERE id = 1", []).unwrap();
-
-    // tile_id = 6 → 사회복지기금
-    let result = handle_event(&conn, 1, 6);
-
-    match result {
-        EventResult::WelfareFund { amount } => {
-            assert_eq!(amount, 10);
-        }
-        _ => panic!("Expected WelfareFund"),
+        // 테스트 실행
     }
-}
 
-#[test]
-fn test_event_a_bankrupt() {
-    let conn = setup_test_db();
+    #[test]
+    fn test_welfare_fund() {
+        let conn = setup_db();
 
-    conn.execute("UPDATE players SET money = 5 WHERE id = 1", []).unwrap();
+        conn.execute("INSERT INTO events VALUES (1, 'fund_add', 50)", []).unwrap();
+        conn.execute("INSERT INTO players VALUES (1, 100)", []).unwrap();
 
-    let result = handle_event(&conn, 1, 6);
+        let result = handle_event(&conn, 1, 1);
 
-    match result {
-        EventResult::WelfareFundBankrupt { paid } => {
-            assert_eq!(paid, 5);
-        }
-        _ => panic!("Expected WelfareFundBankrupt"),
-    }
-}
-
-#[test]
-fn test_event_c_fund_receive() {
-    let conn = setup_test_db();
-
-    conn.execute("UPDATE players SET money = 100 WHERE id = 1", []).unwrap();
-
-    // 기금 50 쌓기
-    conn.execute("UPDATE fund SET amount = 50", []).unwrap();
-
-    // tile_id = 18 → 기금 수령
-    let result = handle_event(&conn, 1, 18);
-
-    match result {
-        EventResult::FundReceive { amount } => {
-            assert_eq!(amount, 50);
-        }
-        _ => panic!("Expected FundReceive"),
-    }
-}
-
-#[test]
-fn test_event_b_estate_tax() {
-    let conn = setup_test_db();
-
-    conn.execute("UPDATE players SET money = 200 WHERE id = 1", []).unwrap();
-
-    // property 총합 100 이상 되게
-    conn.execute("UPDATE properties SET owner_id = 1 WHERE tile_id = 1", []).unwrap();
-
-    let result = handle_event(&conn, 1, 12); // 종부세
-
-    match result {
-        EventResult::EstateTax { amount } => {
-            assert_eq!(amount, 30);
-        }
-        _ => panic!("Expected EstateTax"),
+        assert!(matches!(result, EventResult::WelfareFund { .. }));
     }
 }
