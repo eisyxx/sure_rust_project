@@ -19,7 +19,7 @@
       min-height: 600px;
       background: #fff;
       padding: 30px;
-      padding-top: 50px;
+      padding-top: 30px;
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
@@ -28,8 +28,8 @@
       text-align: center;
       font-size: 30px;
       font-weight: bold;
-      margin-top: 20px;
-      margin-bottom: 60px;
+      margin-top: 10px;
+      margin-bottom: 40px;
     }
 
     /* 🥇 1위 */
@@ -102,6 +102,29 @@
 
     .second { border: 2px solid silver;  background-color: rgb(245, 245, 245);}
     .third { border: 2px solid #c2803f; background-color: #ebded1;}
+
+    .restart-container {
+      display: flex;
+      justify-content: center;
+      margin-top: 30px;
+    }
+
+    .restart-btn {
+      padding: 12px 30px;
+      font-size: 18px;
+      font-weight: bold;
+      border: none;
+      border-radius: 10px;
+      background-color: #4CAF50;
+      color: white;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .restart-btn:hover {
+      background-color: #45a049;
+      transform: scale(1.05);
+    }
   </style>
 </head>
 
@@ -111,6 +134,7 @@
 
     <div id="first-place"></div>
     <div id="other-places"></div>
+    <div class="restart-container"><button class="restart-btn" onclick="restartGame()">Restart</button></div>
   </div>
 
   <script>
@@ -191,6 +215,14 @@
           otherContainer.appendChild(div);
         }
       });
+    }
+    async function restartGame() {
+      try {
+        await fetch("/api/reset", { method: "POST" });
+        window.location.href = "/";
+      } catch (e) {
+        alert("재시작 실패");
+      }
     }
     loadResult();
   </script>

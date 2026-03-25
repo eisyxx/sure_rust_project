@@ -75,6 +75,7 @@ pub fn build_turn_result(
             EventResult::WelfareFund { amount } => TurnAction::EventWelfareFund { amount },
             EventResult::WelfareFundBankrupt { paid } => TurnAction::EventWelfareFundBankrupt { paid },
             EventResult::EstateTax { amount } => TurnAction::EstateTax { amount },
+            EventResult::EstateTaxBankrupt { paid } => TurnAction::EstateTaxBankrupt { paid },
             EventResult::EstateTaxSkipped => TurnAction::EstateTaxSkipped,
             EventResult::FundReceive { amount } => TurnAction::EventFundReceive { amount },
             EventResult::FundReceiveEmpty => TurnAction::FundReceiveEmpty,
@@ -119,6 +120,7 @@ pub enum TurnAction {
     EventFundReceive { amount: i32 },
     FundReceiveEmpty,
     EstateTax { amount: i32 },
+    EstateTaxBankrupt { paid: i32 },
     EstateTaxSkipped,
 }
 
@@ -178,6 +180,9 @@ pub fn process_turn(input: TurnInput, conn: &Connection) -> TurnResult {
             }
             EventResult::EstateTax { amount } => {
                 action = TurnAction::EstateTax { amount };
+            }
+            EventResult::EstateTaxBankrupt { paid } => {
+                action = TurnAction::EstateTaxBankrupt { paid };
             }
             EventResult::EstateTaxSkipped => {
                 action = TurnAction::EstateTaxSkipped;

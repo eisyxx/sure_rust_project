@@ -101,6 +101,8 @@ function bindEvents() {
 
       await animateTurn(result.player_id, result.dice);
 
+      showSalaryMessage(result);
+      
       if (result.game_finished) {
         gameFinished = true;
 
@@ -178,7 +180,7 @@ function bindEvents() {
   // 확인 버튼
   confirmBtn.onclick = async () => {  
     if (pendingTurnResult?.game_finished) {
-      window.location.href = `/result.html?winner=${pendingTurnResult.winner_id}`;
+      window.location.href = `/result`;
     }
     if (pendingDecideResult !== null) {
       // 구매 후 확인 → 턴 마무리만 (알림은 구매 시 이미 표시됨)
@@ -320,6 +322,8 @@ function syncPlayers(serverPlayers) {
 // 플레이어 라벨 업데이트
 function updatePlayerLabel(playerId, name, money, isBankrupt) {
   const label = document.querySelector(`.p${playerId}`);
+  const playerContainer = label?.closest('.player');
+  const playerIcon = playerContainer?.querySelector('.player-icon'); 
 
   if (!label) {
     return;
@@ -328,14 +332,25 @@ function updatePlayerLabel(playerId, name, money, isBankrupt) {
   label.textContent = name;
   if (isBankrupt) {
     label.classList.add('bankrupt');
+    playerIcon?.classList.add('bankrupt');
   } else {
     label.classList.remove('bankrupt');
+    playerIcon?.classList.remove('bankrupt');
   }
 }
 
 // 플레이어 말 렌더링
 function renderPlayers() {
   players.forEach((player) => {
+    const marker = document.querySelector(`.player${player.id}`);
+
+    if (!marker) return;
+
+    // 파산이면 말 제거
+    if (player.isBankrupt) {
+      marker.remove(); 
+      return;
+    }
     moveMarker(player.id, player.position);
   });
 }
@@ -492,13 +507,16 @@ async function loadTransactions(playerId) {
   }
 }
 
-// 턴 메세지 표시 (월급, 구매, 통행료, 파산)
+// 턴 메세지 표시 (월급)
+function showSalaryMessage(result) {
+  if (result.salary > 0) {
+    alert(`월급 ${formatMoney(result.salary)} 지급`);
+  }
+}
+
+// 턴 메세지 표시 (구매, 통행료, 파산)
 function showTurnMessage(result) {
   const messages = [];
-
-  if (result.salary > 0) {
-    messages.push(`월급 ${formatMoney(result.salary)} 지급`);
-  }
 
   if (result.action_type === "purchase") {
     messages.push(`토지 구매 ${formatMoney(result.action_amount)}`);
@@ -513,7 +531,11 @@ function showTurnMessage(result) {
   }
 
   if (result.action_type === "estate_tax") {
-    messages.push("토지 구매 금액이 100만원을 초과하여 부동산세금 30만원을 납부합니다.");
+    messages.push("토지 구매 금액이 100만원을 초과하여 종합부동산세 30만원을 납부합니다.");
+  }
+
+  if (result.action_type === "estate_tax_bankrupt") {
+    messages.push("잔액이 부족하여 종합부동산세 납부 후 파산하였습니다");
   }
 
   if (result.action_type === "estate_tax_skipped") {
