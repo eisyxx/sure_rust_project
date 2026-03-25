@@ -3,10 +3,13 @@ use actix_web::{get, post, web, App, HttpResponse, HttpServer};
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use serde::Serialize;
+
 
 mod repository;
 mod service;
 mod handler;
+use crate::service::game_end_service::{check_game_end, Player as GamePlayer};
 
 pub struct AppState {
     pub conn: Mutex<Connection>,
@@ -30,6 +33,22 @@ async fn index(data: web::Data<AppState>) -> actix_web::Result<NamedFile> {
     repository::init::init_db::init_db(&conn)
         .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
 
+    // DB에서 모든 플레이어 가져오기
+    let db_players = repository::player_repo::get_all_players(&conn)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
+
+    // GamePlayer로 변환
+    let game_players: Vec<GamePlayer> = db_players
+        .into_iter()
+        .map(|p| GamePlayer {
+            id: p.id,
+            position: p.position,
+            money: p.money,
+            lap: p.lap,
+            is_bankrupt: p.is_bankrupt,
+        })
+        .collect();
+
     //세션 초기화
     let mut session = match data.session.lock() {
         Ok(session) => session,
@@ -41,6 +60,8 @@ async fn index(data: web::Data<AppState>) -> actix_web::Result<NamedFile> {
         game_finished: false,
         winner_id: None,
         pending: None,
+        final_rankings: None,
+        players: game_players,
     };
 
     Ok(NamedFile::open(frontend_path("index.html"))?)
@@ -145,6 +166,98 @@ async fn player_transactions(path: web::Path<i32>, data: web::Data<AppState>) ->
     }
 }
 
+// 게임 결과 라우터
+#[get("/result")]
+async fn result_page() -> actix_web::Result<NamedFile> {
+    Ok(NamedFile::open(frontend_path("result.html"))?)
+}
+
+// 게임 결과
+#[derive(Serialize)]
+struct PlayerFrontend {
+    id: i32,
+    name: String,
+    image_url: String,
+    money: i32,
+    is_bankrupt: bool,
+    rank: Option<usize>,
+}
+fn get_frontend_players(
+    conn: &Connection,
+    final_rankings: &Option<Vec<(i32, i32)>>
+) -> Vec<PlayerFrontend> {
+    let all_players = match repository::player_repo::get_all_players(conn) {
+        Ok(players) => players,
+        Err(_) => return vec![], // DB 오류 시 빈 배열 반환
+    };
+
+    if let Some(rankings) = final_rankings {
+        rankings
+            .iter()
+            .enumerate()
+            .map(|(i, (player_id, money))| {
+
+                let player_opt = all_players.iter().find(|p| p.id == *player_id);
+
+                match player_opt {
+                    Some(p) => PlayerFrontend {
+                        id: p.id,
+                        name: format!("Player {}", p.id),
+
+                        image_url: format!("/assets/player{}_icon.png", p.id),
+
+                        money: *money,
+                        is_bankrupt: p.is_bankrupt,
+                        rank: if p.is_bankrupt { None } else { Some(i + 1) },
+                    },
+                    None => {
+                        println!("⚠️ player_id {} not found in DB", player_id);
+
+                        PlayerFrontend {
+                            id: *player_id,
+                            name: format!("Player {}", player_id),
+                            image_url: format!("/assets/player{}_icon.png", player_id),
+                            money: *money,
+                            is_bankrupt: true,
+                            rank: None,
+                        }
+                    }
+                }
+            })
+            .collect()
+    } else {
+        // 게임 아직 안 끝난 경우
+        all_players
+            .iter()
+            .map(|p| PlayerFrontend {
+                id: p.id,
+                name: format!("Player {}", p.id),
+                image_url: format!("/assets/player{}_icon.png", p.id),
+                money: p.money,
+                is_bankrupt: p.is_bankrupt,
+                rank: None,
+            })
+            .collect()
+    }
+}
+
+#[get("/api/result")]
+async fn game_result(data: web::Data<AppState>) -> HttpResponse {
+    let session = match data.session.lock() {
+        Ok(s) => s,
+        Err(_) => return HttpResponse::InternalServerError().body("세션 잠금 실패"),
+    };
+    let conn = match data.conn.lock() {
+            Ok(c) => c,
+            Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
+        };
+
+    let frontend_players = get_frontend_players(&conn, &session.final_rankings);
+
+    HttpResponse::Ok().json(frontend_players)
+}
+
+
 // 서버 실행
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -161,6 +274,8 @@ async fn main() -> std::io::Result<()> {
             game_finished: false,
             winner_id: None,
             pending: None,
+            final_rankings: None,
+            players: vec![],
         }),
     });
 
@@ -174,10 +289,13 @@ async fn main() -> std::io::Result<()> {
             .service(map_script)
             .service(stylesheet)
             .service(game_state)
+            .service(result_page)
             .service(turn_api)
             .service(decide_api)
             .service(player_transactions)
+            .service(game_result) 
                 .service(Files::new("/assets", frontend_path("assets")))
+            .service(Files::new("/", frontend_path("")).index_file("index.html"))
     })
     .bind(format!("0.0.0.0:{}", port))?
     // .bind("127.0.0.1:8080")?

@@ -101,6 +101,15 @@ function bindEvents() {
 
       await animateTurn(result.player_id, result.dice);
 
+      if (result.game_finished) {
+        gameFinished = true;
+
+        if (result.winner_id) {
+          window.location.href = `/result`;
+        }
+        return;
+      }
+
       if (result.action_type === "can_buy") {
         applyState(result);
         waitingForDecision = true;
@@ -168,6 +177,9 @@ function bindEvents() {
 
   // 확인 버튼
   confirmBtn.onclick = async () => {  
+    if (pendingTurnResult?.game_finished) {
+      window.location.href = `/result.html?winner=${pendingTurnResult.winner_id}`;
+    }
     if (pendingDecideResult !== null) {
       // 구매 후 확인 → 턴 마무리만 (알림은 구매 시 이미 표시됨)
       applyState(pendingDecideResult);
@@ -281,7 +293,7 @@ function applyState(state) {
     rollBtn.disabled = true;
 
     if (state.winner_id) {
-      alert(`게임 종료! 승자는 Player ${state.winner_id} 입니다.`);
+      window.location.href = `/result.html?winner=${state.winner_id}`;
     }
   }
 }
