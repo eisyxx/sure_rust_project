@@ -12,6 +12,7 @@ pub enum EventResult {
     WelfareFund { amount: i32 },
     WelfareFundBankrupt { paid: i32 },
     EstateTax { amount: i32 },
+    EstateTaxBankrupt { paid: i32 }, 
     EstateTaxSkipped,
     FundReceive { amount: i32 },
     FundReceiveEmpty,
@@ -51,7 +52,16 @@ pub fn handle_event(
                 .unwrap_or(0);
 
             if total >= 100 {
-                EventResult::EstateTax { amount }
+                let current_money = match get_player_money(conn, player_id) {
+                    Ok(m) => m,
+                    Err(_) => return EventResult::None,
+                };
+
+                if current_money >= amount {
+                    EventResult::EstateTax { amount }
+                } else {
+                    EventResult::EstateTaxBankrupt { paid: current_money }
+                }
             } else {
                 EventResult::EstateTaxSkipped
             }

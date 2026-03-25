@@ -197,6 +197,26 @@ pub fn apply_turn_result(
                 "estate_tax",
             )?;
         }
+
+        // 이벤트 B: 파산
+        TurnAction::EstateTaxBankrupt { paid } => {
+            // 가진 돈 전부 차감
+            update_money(conn, player_id, -*paid)?;
+
+            record_transaction(
+                conn,
+                player_id,
+                "withdraw",
+                *paid,
+                "estate_tax_bankrupt",
+            )?;
+
+            // 토지 초기화
+            reset_owner_for_player(conn, player_id)?;
+
+            // 파산 처리
+            bankrupt(conn, player_id)?;
+        }
     }
 
     Ok(())

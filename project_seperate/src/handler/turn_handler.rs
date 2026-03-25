@@ -292,6 +292,7 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
         TurnAction::EventFundReceive { amount } => {("fund_receive", *amount, None)}
         TurnAction::FundReceiveEmpty => ("fund_receive_empty", 0, None),
         TurnAction::EstateTax { amount } => ("estate_tax", *amount, None),
+        TurnAction::EstateTaxBankrupt { paid } => ("estate_tax_bankrupt", *paid, None),
         TurnAction::EstateTaxSkipped => ("estate_tax_skipped", 0, None),
     };
 
