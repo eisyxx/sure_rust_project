@@ -443,6 +443,7 @@ mod tests {
     }
 
     #[test]
+    /// DB adapter 메서드들이 repository 함수와 정상 연결되는지 검증
     fn test_db_event_repository_methods() {
         let conn = setup_event_db();
 
@@ -460,6 +461,7 @@ mod tests {
     }
 
     #[test]
+    /// Connection wrapper 경로에서 fund_add / tax_if_property / fund_take가 정상 매핑되는지 검증
     fn test_handle_event_with_conn_paths() {
         let conn = setup_event_db();
 
@@ -477,6 +479,7 @@ mod tests {
     }
 
     #[test]
+    /// Connection wrapper 경로에서 이벤트 조회 실패 시 None 반환하는지 검증
     fn test_handle_event_with_conn_event_lookup_fail() {
         let conn = setup_event_db();
         conn.execute("INSERT INTO players VALUES (1, 100)", []).unwrap();

@@ -76,6 +76,7 @@ fn setup_db_for_wrapper() -> Connection {
 }
 
 #[test]
+/// 월급/액션이 없는 기본 케이스에서 위치와 lap 업데이트만 수행되는지 검증
 fn test_none_action_no_salary() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::None, 0);
@@ -89,6 +90,7 @@ fn test_none_action_no_salary() {
 }
 
 #[test]
+/// 월급이 있는 케이스에서 입금 및 salary 거래 기록이 수행되는지 검증
 fn test_salary_path() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::None, 20);
@@ -110,6 +112,7 @@ fn test_salary_path() {
 }
 
 #[test]
+/// Purchase 액션에서 출금/거래기록/소유권 설정이 수행되는지 검증
 fn test_purchase_action() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::Purchase { price: 50 }, 0);
@@ -126,6 +129,7 @@ fn test_purchase_action() {
 }
 
 #[test]
+/// PayToll 액션에서 플레이어 출금 및 소유자 입금 흐름이 수행되는지 검증
 fn test_pay_toll_action() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::PayToll { owner_id: 2, amount: 30 }, 0);
@@ -146,6 +150,7 @@ fn test_pay_toll_action() {
 }
 
 #[test]
+/// Bankrupt 액션에서 잔액 정산/거래기록/소유권 초기화/파산 처리가 수행되는지 검증
 fn test_bankrupt_action() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::Bankrupt { owner_id: 2, paid: 40 }, 0);
@@ -168,6 +173,7 @@ fn test_bankrupt_action() {
 }
 
 #[test]
+/// EventWelfareFund 액션에서 기금 추가 및 거래기록이 수행되는지 검증
 fn test_event_welfare_fund_action() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::EventWelfareFund { amount: 25 }, 0);
@@ -184,6 +190,7 @@ fn test_event_welfare_fund_action() {
 }
 
 #[test]
+/// EventWelfareFundBankrupt 액션에서 기금 추가 후 파산 처리가 수행되는지 검증
 fn test_event_welfare_fund_bankrupt_action() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::EventWelfareFundBankrupt { paid: 15 }, 0);
@@ -201,6 +208,7 @@ fn test_event_welfare_fund_bankrupt_action() {
 }
 
 #[test]
+/// FundReceiveEmpty 액션은 추가 DB 변경 없이 종료되는지 검증
 fn test_fund_receive_empty_action() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::FundReceiveEmpty, 0);
@@ -210,6 +218,7 @@ fn test_fund_receive_empty_action() {
 }
 
 #[test]
+/// EventFundReceive 액션에서 입금/거래기록/기금 초기화가 수행되는지 검증
 fn test_event_fund_receive_action() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::EventFundReceive { amount: 70 }, 0);
@@ -226,6 +235,7 @@ fn test_event_fund_receive_action() {
 }
 
 #[test]
+/// EstateTaxSkipped 액션은 추가 DB 변경 없이 종료되는지 검증
 fn test_estate_tax_skipped_action() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::EstateTaxSkipped, 0);
@@ -235,6 +245,7 @@ fn test_estate_tax_skipped_action() {
 }
 
 #[test]
+/// EstateTax 액션에서 세금 출금 및 거래기록이 수행되는지 검증
 fn test_estate_tax_action() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::EstateTax { amount: 33 }, 0);
@@ -250,6 +261,7 @@ fn test_estate_tax_action() {
 }
 
 #[test]
+/// EstateTaxBankrupt 액션에서 세금 출금 후 파산 처리가 수행되는지 검증
 fn test_estate_tax_bankrupt_action() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::EstateTaxBankrupt { paid: 22 }, 0);
@@ -267,6 +279,7 @@ fn test_estate_tax_bankrupt_action() {
 }
 
 #[test]
+/// Connection wrapper 경로에서 TurnResult 반영(위치/lap)이 정상 동작하는지 검증
 fn test_apply_turn_result_with_conn_wrapper() {
     let conn = setup_db_for_wrapper();
 
@@ -284,6 +297,7 @@ fn test_apply_turn_result_with_conn_wrapper() {
 }
 
 #[test]
+/// Connection wrapper 경로에서 Purchase 액션 반영(소유권 반영)이 동작하는지 검증
 fn test_apply_turn_result_with_conn_purchase_path() {
     let conn = setup_db_for_wrapper();
 
@@ -297,6 +311,7 @@ fn test_apply_turn_result_with_conn_purchase_path() {
 }
 
 #[test]
+/// Connection wrapper 경로에서 Bankrupt 액션 반영(파산 플래그)이 동작하는지 검증
 fn test_apply_turn_result_with_conn_bankrupt_path() {
     let conn = setup_db_for_wrapper();
 
@@ -310,6 +325,7 @@ fn test_apply_turn_result_with_conn_bankrupt_path() {
 }
 
 #[test]
+/// Connection wrapper 경로에서 EventWelfareFund 액션 반영(기금 증가)이 동작하는지 검증
 fn test_apply_turn_result_with_conn_welfare_fund_path() {
     let conn = setup_db_for_wrapper();
 
@@ -323,6 +339,7 @@ fn test_apply_turn_result_with_conn_welfare_fund_path() {
 }
 
 #[test]
+/// Connection wrapper 경로에서 EventFundReceive 액션 반영(기금 초기화)이 동작하는지 검증
 fn test_apply_turn_result_with_conn_fund_receive_path() {
     let conn = setup_db_for_wrapper();
 
@@ -336,6 +353,7 @@ fn test_apply_turn_result_with_conn_fund_receive_path() {
 }
 
 #[test]
+/// 위치/lap 업데이트 실패 시 즉시 에러를 전파하는지 검증
 fn test_error_on_update_position_and_lap() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::None, 0);
@@ -348,6 +366,7 @@ fn test_error_on_update_position_and_lap() {
 }
 
 #[test]
+/// salary 거래기록 실패 시 에러를 전파하는지 검증
 fn test_error_on_salary_deposit_transaction() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::None, 10);
@@ -363,6 +382,7 @@ fn test_error_on_salary_deposit_transaction() {
 }
 
 #[test]
+/// Purchase 액션의 set_owner 실패 시 에러를 전파하는지 검증
 fn test_error_on_purchase_set_owner() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::Purchase { price: 50 }, 0);
@@ -379,6 +399,7 @@ fn test_error_on_purchase_set_owner() {
 }
 
 #[test]
+/// PayToll 액션에서 소유자 입금 실패 시 에러를 전파하는지 검증
 fn test_error_on_pay_toll_second_transfer() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::PayToll { owner_id: 2, amount: 30 }, 0);
@@ -395,6 +416,7 @@ fn test_error_on_pay_toll_second_transfer() {
 }
 
 #[test]
+/// Bankrupt 액션 마지막 파산 처리 실패 시 에러를 전파하는지 검증
 fn test_error_on_bankrupt_finalize() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::Bankrupt { owner_id: 2, paid: 40 }, 0);
@@ -417,6 +439,7 @@ fn test_error_on_bankrupt_finalize() {
 }
 
 #[test]
+/// EventWelfareFund 액션 거래기록 실패 시 에러를 전파하는지 검증
 fn test_error_on_welfare_fund_transaction() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::EventWelfareFund { amount: 25 }, 0);
@@ -433,6 +456,7 @@ fn test_error_on_welfare_fund_transaction() {
 }
 
 #[test]
+/// EventFundReceive 액션의 reset_fund 실패 시 에러를 전파하는지 검증
 fn test_error_on_fund_receive_reset() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::EventFundReceive { amount: 70 }, 0);
@@ -449,6 +473,7 @@ fn test_error_on_fund_receive_reset() {
 }
 
 #[test]
+/// EstateTax 액션 거래기록 실패 시 에러를 전파하는지 검증
 fn test_error_on_estate_tax_transaction() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::EstateTax { amount: 33 }, 0);
@@ -464,6 +489,7 @@ fn test_error_on_estate_tax_transaction() {
 }
 
 #[test]
+/// Purchase 액션의 출금 거래기록 실패 시 에러를 전파하는지 검증
 fn test_error_on_purchase_withdraw_transaction() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::Purchase { price: 50 }, 0);
@@ -479,6 +505,7 @@ fn test_error_on_purchase_withdraw_transaction() {
 }
 
 #[test]
+/// PayToll 액션의 플레이어 출금 거래기록 실패 시 에러를 전파하는지 검증
 fn test_error_on_pay_toll_from_player_transaction() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::PayToll { owner_id: 2, amount: 30 }, 0);
@@ -494,6 +521,7 @@ fn test_error_on_pay_toll_from_player_transaction() {
 }
 
 #[test]
+/// PayToll 액션의 소유자 입금 거래기록 실패 시 에러를 전파하는지 검증
 fn test_error_on_pay_toll_to_owner_transaction() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::PayToll { owner_id: 2, amount: 30 }, 0);
@@ -514,6 +542,7 @@ fn test_error_on_pay_toll_to_owner_transaction() {
 }
 
 #[test]
+/// Bankrupt 액션의 소유자 입금 거래기록 실패 시 에러를 전파하는지 검증
 fn test_error_on_bankrupt_deposit_transaction() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::Bankrupt { owner_id: 2, paid: 40 }, 0);
@@ -530,6 +559,7 @@ fn test_error_on_bankrupt_deposit_transaction() {
 }
 
 #[test]
+/// Bankrupt 액션의 파산자 출금 거래기록 실패 시 에러를 전파하는지 검증
 fn test_error_on_bankrupt_withdraw_transaction() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::Bankrupt { owner_id: 2, paid: 40 }, 0);
@@ -550,6 +580,7 @@ fn test_error_on_bankrupt_withdraw_transaction() {
 }
 
 #[test]
+/// EventWelfareFundBankrupt 액션 거래기록 실패 시 에러를 전파하는지 검증
 fn test_error_on_welfare_fund_bankrupt_transaction() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::EventWelfareFundBankrupt { paid: 15 }, 0);
@@ -565,6 +596,7 @@ fn test_error_on_welfare_fund_bankrupt_transaction() {
 }
 
 #[test]
+/// EventFundReceive 액션 입금 거래기록 실패 시 에러를 전파하는지 검증
 fn test_error_on_fund_receive_deposit_transaction() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::EventFundReceive { amount: 70 }, 0);
@@ -580,6 +612,7 @@ fn test_error_on_fund_receive_deposit_transaction() {
 }
 
 #[test]
+/// EstateTaxBankrupt 액션 거래기록 실패 시 에러를 전파하는지 검증
 fn test_error_on_estate_tax_bankrupt_transaction() {
     let mut repo = MockExecRepo::new();
     let result = make_result(TurnAction::EstateTaxBankrupt { paid: 22 }, 0);

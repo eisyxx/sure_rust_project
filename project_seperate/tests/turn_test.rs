@@ -29,6 +29,7 @@ fn sample_step(position: i32) -> MoveStep {
 }
 
 #[test]
+/// 주사위/이동/월급 계산 함수가 정상 동작하는지 기본 검증
 fn test_roll_and_move_runs() {
     let step = roll_and_move(0, 0, 20);
     assert!((1..=6).contains(&step.dice));
@@ -36,6 +37,7 @@ fn test_roll_and_move_runs() {
 }
 
 #[test]
+/// 이벤트 결과 WelfareFund가 TurnAction::EventWelfareFund로 매핑되는지 검증
 fn test_event_welfare_fund_mapping() {
     let mut repo = MockEventRepo::new();
     repo.expect_handle_event()
@@ -48,6 +50,7 @@ fn test_event_welfare_fund_mapping() {
 }
 
 #[test]
+/// 이벤트 나머지 케이스들이 각 TurnAction으로 정확히 매핑되는지 검증
 fn test_event_other_mappings() {
     let mut repo = MockEventRepo::new();
     repo.expect_handle_event()
@@ -80,6 +83,7 @@ fn test_event_other_mappings() {
 }
 
 #[test]
+/// 일반 타일에서 구매 가능 조건일 때 Purchase 액션이 선택되는지 검증
 fn test_non_event_purchase() {
     let mut repo = MockEventRepo::new();
     repo.expect_handle_event().never();
@@ -89,6 +93,7 @@ fn test_non_event_purchase() {
 }
 
 #[test]
+/// 일반 타일에서 소유자 존재 + 통행료 지불 가능일 때 PayToll 액션이 선택되는지 검증
 fn test_non_event_pay_toll() {
     let mut repo = MockEventRepo::new();
     repo.expect_handle_event().never();
@@ -98,6 +103,7 @@ fn test_non_event_pay_toll() {
 }
 
 #[test]
+/// 일반 타일에서 소유자 존재 + 통행료 지불 불가일 때 Bankrupt 액션이 선택되는지 검증
 fn test_non_event_bankrupt() {
     let mut repo = MockEventRepo::new();
     repo.expect_handle_event().never();
@@ -107,6 +113,7 @@ fn test_non_event_bankrupt() {
 }
 
 #[test]
+/// 일반 타일에서 구매 의사 있음 + 잔액 부족이면 None으로 매핑되는지 검증
 fn test_non_event_not_enough_money_maps_none() {
     let mut repo = MockEventRepo::new();
     repo.expect_handle_event().never();
@@ -116,6 +123,7 @@ fn test_non_event_not_enough_money_maps_none() {
 }
 
 #[test]
+/// 일반 타일에서 구매 의사 없음이면 None으로 매핑되는지 검증
 fn test_non_event_skip_maps_none() {
     let mut repo = MockEventRepo::new();
     repo.expect_handle_event().never();
@@ -125,6 +133,7 @@ fn test_non_event_skip_maps_none() {
 }
 
 #[test]
+/// 시작 타일(start)은 항상 None 액션으로 처리되는지 검증
 fn test_start_tile_maps_none() {
     let mut repo = MockEventRepo::new();
     repo.expect_handle_event().never();
@@ -134,6 +143,7 @@ fn test_start_tile_maps_none() {
 }
 
 #[test]
+/// Connection wrapper 경로를 통해 event 타일 처리 결과가 정상 매핑되는지 검증
 fn test_build_turn_result_with_conn_wrapper_event_path() {
     let conn = Connection::open_in_memory().unwrap();
 
