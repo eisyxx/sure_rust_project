@@ -42,6 +42,7 @@
 │  ├─ target: 백엔드 실행 후 산출물
 │  └─ Cargo.toml: 프로젝트 정보 저장소
 ├─ index.html
+├─ result.html
 ├─ map.js
 └─ style.css
 ```
