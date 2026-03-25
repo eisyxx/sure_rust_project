@@ -7,10 +7,28 @@ use crate::service::{
     roll_dice_service::roll_dice,
     event_service::{handle_event_with_conn, EventResult},
 };
-use crate::repository::tile_repo::get_tile_info;
-use crate::repository::property_repo::get_owner;
 
-#[derive(Clone)]
+pub trait TurnEventRepository {
+    fn handle_event(&self, player_id: i32, tile_id: i32) -> EventResult;
+}
+
+pub struct DbTurnEventRepository<'a> {
+    conn: &'a Connection,
+}
+
+impl<'a> DbTurnEventRepository<'a> {
+    pub fn new(conn: &'a Connection) -> Self {
+        Self { conn }
+    }
+}
+
+impl<'a> TurnEventRepository for DbTurnEventRepository<'a> {
+    fn handle_event(&self, player_id: i32, tile_id: i32) -> EventResult {
+        handle_event_with_conn(self.conn, player_id, tile_id)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 // 한 턴 진행에 필요한 입력 데이터
 pub struct TurnInput {
     pub player_id: i32,
@@ -29,6 +47,7 @@ pub struct TurnInput {
 }
 
 // 한 턴 진행 결과 데이터
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TurnResult {
     pub dice: i32,
     pub new_position: i32,
@@ -38,6 +57,7 @@ pub struct TurnResult {
 }
 
 // 이동만 처리한 중간 결과 (구매 결정 전 단계)
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MoveStep {
     pub dice: i32,
     pub new_position: i32,
@@ -59,8 +79,8 @@ pub fn roll_and_move(position: i32, lap: i32, total_tiles: i32) -> MoveStep {
 }
 
 /// MoveStep + 구매 여부로 TurnResult 생성 (통행료/구매/이벤트/None 처리)
-pub fn build_turn_result(
-    conn: &Connection,
+pub fn build_turn_result_with_repo<R: TurnEventRepository>(
+    repo: &R,
     move_step: MoveStep,
     player_id: i32,
     money_after_salary: i32,
@@ -71,7 +91,7 @@ pub fn build_turn_result(
     tile_type: &str,
 ) -> TurnResult {
     let action = if tile_type == "event" {
-        match handle_event_with_conn(conn, player_id, move_step.new_position) {
+        match repo.handle_event(player_id, move_step.new_position) {
             EventResult::WelfareFund { amount } => TurnAction::EventWelfareFund { amount },
             EventResult::WelfareFundBankrupt { paid } => TurnAction::EventWelfareFundBankrupt { paid },
             EventResult::EstateTax { amount } => TurnAction::EstateTax { amount },
@@ -108,8 +128,34 @@ pub fn build_turn_result(
     }
 }
 
+/// Connection 기반 wrapper (기존 호출부 호환)
+pub fn build_turn_result(
+    conn: &Connection,
+    move_step: MoveStep,
+    player_id: i32,
+    money_after_salary: i32,
+    tile_price: i32,
+    tile_toll: i32,
+    tile_owner: Option<i32>,
+    will_buy: bool,
+    tile_type: &str,
+) -> TurnResult {
+    let repo = DbTurnEventRepository::new(conn);
+    build_turn_result_with_repo(
+        &repo,
+        move_step,
+        player_id,
+        money_after_salary,
+        tile_price,
+        tile_toll,
+        tile_owner,
+        will_buy,
+        tile_type,
+    )
+}
+
 // 턴 동안 발생한 행동 종류
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TurnAction {
     None,
     PayToll { owner_id: i32, amount: i32 },
