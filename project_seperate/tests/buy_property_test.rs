@@ -1,5 +1,6 @@
 /*
 owner 있음 + 돈 충분 → PayToll
+owner 있음 + 소유자 본인 → Skip
 owner 있음 + 돈 부족 → Bankrupt
 owner 없음 + 구매 안함 → Skip
 owner 없음 + 구매 함 → Purchase
@@ -26,6 +27,15 @@ mod tests {
     }
 
     #[test]
+    fn test_owner_is_self_should_skip() {
+        let player_id = 1;
+
+        let result = decide_buy_property(player_id, 1000, 200, 50,Some(player_id),true, "property".to_string());
+
+        assert!(matches!(result, BuyResult::Skip));
+    }
+
+    #[test]
     fn test_bankrupt() {
         let result = decide_buy_property(1, 10, 50, 20, Some(2), false, "land".to_string());
 
@@ -39,14 +49,14 @@ mod tests {
     }
 
     #[test]
-    fn test_skip_not_buy() {
+    fn test_skip() {
         let result = decide_buy_property(1, 100, 50, 10, None, false, "land".to_string());
 
         assert!(matches!(result, BuyResult::Skip));
     }
 
     #[test]
-    fn test_purchase_success() {
+    fn test_purchase() {
         let result = decide_buy_property(1, 100, 50, 10, None, true, "land".to_string());
 
         match result {
