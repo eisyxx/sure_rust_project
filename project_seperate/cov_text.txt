@@ -1,0 +1,962 @@
+﻿C:\Users\suresoft\Documents\sure_rust_project\project_seperate\src\service\buy_property_service.rs:
+    1|       |/// ????꾩갑 ??遺?숈궛 愿???됰룞??寃곗젙?섎뒗 ?⑥닔
+    2|       |/// ?뚯쑀???щ????곕씪 ?듯뻾猷?吏遺?or 援щℓor ?뚯궛 ?깆쓣 ?먮떒
+    3|     14|pub fn decide_buy_property(
+    4|     14|    player_id: i32,
+    5|     14|    money: i32,
+    6|     14|    tile_price: i32,
+    7|     14|    tile_toll: i32,
+    8|     14|    owner: Option<i32>,
+    9|     14|    will_buy: bool,
+   10|     14|    tile_type: String,
+   11|     14|) -> BuyResult {
+   12|       |
+   13|     14|    if tile_type == "event" {
+  ------------------
+  |  Branch (13:8): [True: 1, False: 13]
+  ------------------
+  |  Branch (13:8): [Folded - Ignored]
+  ------------------
+  |  Branch (13:8): [Folded - Ignored]
+  ------------------
+  |  Branch (13:8): [True: 0, False: 0]
+  ------------------
+   14|      1|        return BuyResult::Skip;
+   15|     13|    }
+   16|       |
+   17|     13|    if tile_type == "start" {
+  ------------------
+  |  Branch (17:8): [True: 2, False: 11]
+  ------------------
+  |  Branch (17:8): [Folded - Ignored]
+  ------------------
+  |  Branch (17:8): [Folded - Ignored]
+  ------------------
+  |  Branch (17:8): [True: 0, False: 0]
+  ------------------
+   18|      2|        return BuyResult::Skip;
+   19|     11|    }
+   20|       |
+   21|     11|    match owner {
+   22|       |        // 1. ?대? ?뚯쑀?먭? ?덈뒗 寃쎌슦 ???듯뻾猷?泥섎━
+   23|      5|        Some(owner_id) => {
+   24|       |            // ?뚯쑀?먭? 蹂몄씤??寃쎌슦 skip
+   25|      5|            if owner_id == player_id {
+  ------------------
+  |  Branch (25:16): [True: 1, False: 4]
+  ------------------
+  |  Branch (25:16): [Folded - Ignored]
+  ------------------
+  |  Branch (25:16): [Folded - Ignored]
+  ------------------
+  |  Branch (25:16): [True: 0, False: 0]
+  ------------------
+   26|      1|                return BuyResult::Skip;
+   27|      4|            }
+   28|      4|            if money >= tile_toll {
+  ------------------
+  |  Branch (28:16): [True: 2, False: 2]
+  ------------------
+  |  Branch (28:16): [Folded - Ignored]
+  ------------------
+  |  Branch (28:16): [Folded - Ignored]
+  ------------------
+  |  Branch (28:16): [True: 0, False: 0]
+  ------------------
+   29|       |                // ?듯뻾猷?吏遺?媛?????듯뻾猷?吏遺?   30|      2|                BuyResult::PayToll {
+   31|      2|                    owner_id,
+   32|      2|                    amount: tile_toll,
+   33|      2|                }
+   34|       |            } else {
+   35|       |                // ?붿븸 遺議???媛吏????꾨? 吏遺????뚯궛
+   36|      2|                BuyResult::Bankrupt {
+   37|      2|                    owner_id,
+   38|      2|                    paid: money,
+   39|      2|                }
+   40|       |            }
+   41|       |        }
+   42|       |
+   43|       |        // 2. ?뚯쑀?먭? ?녿뒗 寃쎌슦: 援щℓ ?щ? ?먮떒
+   44|       |        None => {
+   45|      6|            if will_buy {
+  ------------------
+  |  Branch (45:16): [True: 4, False: 2]
+  ------------------
+  |  Branch (45:16): [Folded - Ignored]
+  ------------------
+  |  Branch (45:16): [Folded - Ignored]
+  ------------------
+  |  Branch (45:16): [True: 0, False: 0]
+  ------------------
+   46|      4|                if money >= tile_price {
+  ------------------
+  |  Branch (46:20): [True: 2, False: 2]
+  ------------------
+  |  Branch (46:20): [Folded - Ignored]
+  ------------------
+  |  Branch (46:20): [Folded - Ignored]
+  ------------------
+  |  Branch (46:20): [True: 0, False: 0]
+  ------------------
+   47|       |                    // 援щℓ 媛??   48|      2|                    BuyResult::Purchase {
+   49|      2|                        price: tile_price,
+   50|      2|                    }
+   51|       |                } else {
+   52|       |                    // ?붿븸 遺議???援щℓ 遺덇?
+   53|      2|                    BuyResult::NotEnoughMoney
+   54|       |                }
+   55|       |            } else {
+   56|       |                // 援щℓ?섏? ?딆쓬
+   57|      2|                BuyResult::Skip
+   58|       |            }
+   59|       |        }
+   60|       |    }
+   61|     14|}
+   62|       |
+   63|       |/// 遺?숈궛 泥섎━ 寃곌낵
+   64|       |pub enum BuyResult {
+   65|       |    PayToll { owner_id: i32, amount: i32 },
+   66|       |    Purchase { price: i32 },
+   67|       |    Bankrupt { owner_id: i32, paid: i32 },
+   68|       |    NotEnoughMoney,
+   69|       |    Skip,
+   70|       |}
+
+C:\Users\suresoft\Documents\sure_rust_project\project_seperate\src\service\event_service.rs:
+    1|       |use rusqlite::Connection;
+    2|       |
+    3|       |use crate::repository::{
+    4|       |    event_repo,
+    5|       |    player_repo,
+    6|       |    property_repo,
+    7|       |};
+    8|       |
+    9|       |/// ?대깽??寃곌낵
+   10|       |#[derive(Debug, PartialEq, Eq)]
+   11|       |pub enum EventResult {
+   12|       |    WelfareFund { amount: i32 },
+   13|       |    WelfareFundBankrupt { paid: i32 },
+   14|       |    EstateTax { amount: i32 },
+   15|       |    EstateTaxBankrupt { paid: i32 }, 
+   16|       |    EstateTaxSkipped,
+   17|       |    FundReceive { amount: i32 },
+   18|       |    FundReceiveEmpty,
+   19|       |    None,
+   20|       |}
+   21|       |
+   22|       |/// Repository 異붿긽??trait
+   23|       |pub trait EventRepository {
+   24|       |    fn get_event_info(&self, tile_id: i32) -> rusqlite::Result<(String, i32)>;
+   25|       |    fn get_player_money(&self, player_id: i32) -> rusqlite::Result<i32>;
+   26|       |    fn get_player_total_property_price(&self, player_id: i32) -> rusqlite::Result<i32>;
+   27|       |    fn get_fund_amount(&self) -> rusqlite::Result<i32>;
+   28|       |}
+   29|       |
+   30|       |/// Production ??adapter
+   31|       |pub struct DbEventRepository<'a> {
+   32|       |    conn: &'a Connection,
+   33|       |}
+   34|       |
+   35|       |impl<'a> DbEventRepository<'a> {
+   36|      6|    pub fn new(conn: &'a Connection) -> Self {
+   37|      6|        DbEventRepository { conn }
+   38|      6|    }
+   39|       |}
+   40|       |
+   41|       |impl<'a> EventRepository for DbEventRepository<'a> {
+   42|      6|    fn get_event_info(&self, tile_id: i32) -> rusqlite::Result<(String, i32)> {
+   43|      6|        event_repo::get_event_info(self.conn, tile_id)
+   44|      6|    }
+   45|       |
+   46|      4|    fn get_player_money(&self, player_id: i32) -> rusqlite::Result<i32> {
+   47|      4|        player_repo::get_player_money(self.conn, player_id)
+   48|      4|    }
+   49|       |
+   50|      2|    fn get_player_total_property_price(&self, player_id: i32) -> rusqlite::Result<i32> {
+   51|      2|        property_repo::get_player_total_property_price(self.conn, player_id)
+   52|      2|    }
+   53|       |
+   54|      2|    fn get_fund_amount(&self) -> rusqlite::Result<i32> {
+   55|      2|        event_repo::get_fund_amount(self.conn)
+   56|      2|    }
+   57|       |}
+   58|       |
+   59|       |/// ?대깽??泥섎━
+   60|     27|pub fn handle_event<R: EventRepository>(
+   61|     27|    repo: &R,
+   62|     27|    player_id: i32,
+   63|     27|    tile_id: i32,
+   64|     27|) -> EventResult {
+   65|     27|    let (event_type, amount) = match repo.get_event_info(tile_id) {
+                       ^23         ^23
+   66|     23|        Ok(info) => info,
+   67|      4|        Err(_) => return EventResult::None,
+   68|       |    };
+   69|       |
+   70|     23|    match event_type.as_str() {
+   71|       |
+   72|       |        // A: ?ы쉶蹂듭?湲곌툑
+   73|     23|        "fund_add" => {
+   74|      9|            let current_money = match repo.get_player_money(player_id) {
+                              ^8
+   75|      8|                Ok(m) => m,
+   76|      1|                Err(_) => return EventResult::None,
+   77|       |            };
+   78|       |
+   79|      8|            if current_money >= amount {
+  ------------------
+  |  Branch (79:16): [True: 5, False: 1]
+  ------------------
+  |  Branch (79:16): [True: 2, False: 0]
+  ------------------
+  |  Branch (79:16): [Folded - Ignored]
+  ------------------
+  |  Branch (79:16): [Folded - Ignored]
+  ------------------
+  |  Branch (79:16): [True: 0, False: 0]
+  ------------------
+   80|      7|                EventResult::WelfareFund { amount }
+   81|       |            } else {
+   82|      1|                EventResult::WelfareFundBankrupt { paid: current_money }
+   83|       |            }
+   84|       |        }
+   85|       |
+   86|       |        // B: 醫낇빀遺?숈궛??   87|     14|        "tax_if_property" => {
+   88|      7|            let total = repo.get_player_total_property_price(player_id)
+   89|      7|                .unwrap_or(0);
+   90|       |
+   91|      7|            if total >= 100 {
+  ------------------
+  |  Branch (91:16): [True: 4, False: 2]
+  ------------------
+  |  Branch (91:16): [True: 1, False: 0]
+  ------------------
+  |  Branch (91:16): [Folded - Ignored]
+  ------------------
+  |  Branch (91:16): [Folded - Ignored]
+  ------------------
+  |  Branch (91:16): [True: 0, False: 0]
+  ------------------
+   92|      5|                let current_money = match repo.get_player_money(player_id) {
+                                  ^4
+   93|      4|                    Ok(m) => m,
+   94|      1|                    Err(_) => return EventResult::None,
+   95|       |                };
+   96|       |
+   97|      4|                if current_money >= amount {
+  ------------------
+  |  Branch (97:20): [True: 2, False: 1]
+  ------------------
+  |  Branch (97:20): [True: 1, False: 0]
+  ------------------
+  |  Branch (97:20): [Folded - Ignored]
+  ------------------
+  |  Branch (97:20): [Folded - Ignored]
+  ------------------
+  |  Branch (97:20): [True: 0, False: 0]
+  ------------------
+   98|      3|                    EventResult::EstateTax { amount }
+   99|       |                } else {
+  100|      1|                    EventResult::EstateTaxBankrupt { paid: current_money }
+  101|       |                }
+  102|       |            } else {
+  103|      2|                EventResult::EstateTaxSkipped
+  104|       |            }
+  105|       |        }
+  106|       |
+  107|       |        // C: 湲곌툑 ?섎졊
+  108|      7|        "fund_take" => {
+  109|      5|            let fund_amount = match repo.get_fund_amount() {
+                              ^4
+  110|      4|                Ok(a) => a,
+  111|      1|                Err(_) => return EventResult::None,
+  112|       |            };
+  113|       |
+  114|      4|            if fund_amount > 0 {
+  ------------------
+  |  Branch (114:16): [True: 1, False: 2]
+  ------------------
+  |  Branch (114:16): [True: 1, False: 0]
+  ------------------
+  |  Branch (114:16): [Folded - Ignored]
+  ------------------
+  |  Branch (114:16): [Folded - Ignored]
+  ------------------
+  |  Branch (114:16): [True: 0, False: 0]
+  ------------------
+  115|      2|                EventResult::FundReceive { amount: fund_amount }
+  116|       |            } else {
+  117|      2|                EventResult::FundReceiveEmpty
+  118|       |            }
+  119|       |        }
+  120|       |
+  121|      2|        _ => EventResult::None,
+  122|       |    }
+  123|     27|}
+  124|       |
+  125|       |/// Connection??諛쏅뒗 ?섑띁 ?⑥닔 (湲곗〈 肄붾뱶????명솚??
+  126|      5|pub fn handle_event_with_conn(
+  127|      5|    conn: &Connection,
+  128|      5|    player_id: i32,
+  129|      5|    tile_id: i32,
+  130|      5|) -> EventResult {
+  131|      5|    let repo = DbEventRepository::new(conn);
+  132|      5|    handle_event(&repo, player_id, tile_id)
+  133|      5|}
+
+C:\Users\suresoft\Documents\sure_rust_project\project_seperate\src\service\game_end_service.rs:
+    1|       |#[derive(Clone, Debug)]
+    2|       |pub struct Player {
+    3|       |    pub id: i32,
+    4|       |    pub position: i32,
+    5|       |    pub money: i32,
+    6|       |    pub lap: i32,
+    7|       |    pub is_bankrupt: bool,
+    8|       |}
+    9|       |
+   10|       |/// 寃뚯엫 醫낅즺 寃곌낵
+   11|       |pub struct GameResult {
+   12|       |    pub is_finished: bool,
+   13|       |    pub winner_id: Option<i32>,
+   14|       |    pub rankings: Vec<(i32, i32)>, // (player_id, final_money)
+   15|       |}
+   16|       |
+   17|       |/// 寃뚯엫 醫낅즺 議곌굔???뺤씤?섍퀬 寃곌낵瑜?怨꾩궛
+   18|      5|pub fn check_game_end(players: Vec<Player>) -> GameResult {
+   19|      5|    let mut active_players = players
+   20|      5|        .iter()
+   21|     10|        .filter(|p| !p.is_bankrupt)
+                       ^5
+   22|      5|        .cloned()
+   23|      5|        .collect::<Vec<_>>();
+   24|       |
+   25|      5|    if active_players.is_empty() {
+  ------------------
+  |  Branch (25:8): [True: 1, False: 4]
+  ------------------
+  |  Branch (25:8): [Folded - Ignored]
+  ------------------
+  |  Branch (25:8): [Folded - Ignored]
+  ------------------
+  |  Branch (25:8): [True: 0, False: 0]
+  ------------------
+   26|      1|        return GameResult {
+   27|      1|            is_finished: true,
+   28|      1|            winner_id: None,
+   29|      1|            rankings: vec![],
+   30|      1|        };
+   31|      4|    }
+   32|       |
+   33|      4|    if active_players.len() == 1 {
+  ------------------
+  |  Branch (33:8): [True: 1, False: 3]
+  ------------------
+  |  Branch (33:8): [Folded - Ignored]
+  ------------------
+  |  Branch (33:8): [Folded - Ignored]
+  ------------------
+  |  Branch (33:8): [True: 0, False: 0]
+  ------------------
+   34|      1|        return GameResult {
+   35|      1|            is_finished: true,
+   36|      1|            winner_id: Some(active_players[0].id),
+   37|      1|            rankings: vec![(active_players[0].id, active_players[0].money)],
+   38|      1|        };
+   39|      3|    }
+   40|       |
+   41|       |    // 紐⑤뱺 ?앹〈 ?뚮젅?댁뼱媛 3諛뷀??댁긽 ?뚯븯????醫낅즺
+   42|      5|    let finished = active_players.iter().all(|p| p.lap >= 3);
+                      ^3         ^3                    ^3
+   43|       |
+   44|      3|    if !finished {
+  ------------------
+  |  Branch (44:8): [True: 1, False: 2]
+  ------------------
+  |  Branch (44:8): [Folded - Ignored]
+  ------------------
+  |  Branch (44:8): [Folded - Ignored]
+  ------------------
+  |  Branch (44:8): [True: 0, False: 0]
+  ------------------
+   45|      1|        return GameResult {
+   46|      1|            is_finished: false,
+   47|      1|            winner_id: None,
+   48|      1|            rankings: vec![],
+   49|      1|        };
+   50|      2|    }
+   51|       |
+   52|       |    // ??궧 ?앹꽦: ?뚯궛??留덉?留됱쑝濡?蹂대궡湲?   53|      2|    let mut rankings: Vec<(i32, i32)> = players
+   54|      2|        .iter()
+   55|      5|        .map(|p| (p.id, if p.is_bankrupt { -1 } else { p.money })) // ?뚯궛?먮뒗 -1濡?泥섎━
+                       ^2                                ^1          ^4
+  ------------------
+  |  Branch (55:28): [True: 1, False: 4]
+  ------------------
+  |  Branch (55:28): [Folded - Ignored]
+  ------------------
+  |  Branch (55:28): [Folded - Ignored]
+  ------------------
+  |  Branch (55:28): [True: 0, False: 0]
+  ------------------
+   56|      2|        .collect();
+   57|       |
+   58|       |    // ??湲곗? ?대┝李⑥닚 ?뺣젹 (?뚯궛?먮뒗 -1 ??留???
+   59|      3|    rankings.sort_by(|a, b| b.1.cmp(&a.1));
+                  ^2       ^2
+   60|       |
+   61|       |    // ?곗듅?? 媛???믪? ??媛吏??앹〈 ?뚮젅?댁뼱
+   62|      2|    let winner_id = rankings
+   63|      2|        .iter()
+   64|      2|        .find(|(id, money)| *money != -1)
+   65|      2|        .map(|(id, _)| *id);
+   66|       |
+   67|      2|    GameResult {
+   68|      2|        is_finished: finished,
+   69|      2|        winner_id,
+   70|      2|        rankings,
+   71|      2|    }
+   72|      5|}
+
+C:\Users\suresoft\Documents\sure_rust_project\project_seperate\src\service\movement_service.rs:
+    1|       |#[derive(Clone, Debug)]
+    2|       |pub struct MoveResult {
+    3|       |    pub new_position: i32,
+    4|       |    pub new_lap: i32,
+    5|       |    pub passed_start: bool,
+    6|       |}
+    7|       |
+    8|       |// ?뚮젅?댁뼱???대룞 寃곌낵瑜?怨꾩궛??蹂寃쎈맂 ?꾩튂, 諛뷀??? ?쒖옉 吏???듦낵 ?щ?瑜?諛섑솚
+    9|      3|pub fn move_player(
+   10|      3|    position: i32,
+   11|      3|    lap: i32,
+   12|      3|    dice: i32,
+   13|      3|    total_tiles: i32,
+   14|      3|) -> MoveResult {
+   15|       |
+   16|      3|    let mut new_position = position + dice;
+   17|      3|    let mut new_lap = lap;
+   18|      3|    let mut passed_start = false;
+   19|       |
+   20|      3|    if new_position >= total_tiles {
+  ------------------
+  |  Branch (20:8): [True: 1, False: 2]
+  |  Branch (20:8): [Folded - Ignored]
+  |  Branch (20:8): [Folded - Ignored]
+  |  Branch (20:8): [True: 0, False: 0]
+  ------------------
+   21|      1|        new_position %= total_tiles;
+   22|      1|        new_lap += 1;
+   23|      1|        passed_start = true;
+   24|      2|    }
+   25|       |
+   26|      3|    MoveResult {
+   27|      3|        new_position,
+   28|      3|        new_lap,
+   29|      3|        passed_start,
+   30|      3|    }
+   31|      3|}
+
+C:\Users\suresoft\Documents\sure_rust_project\project_seperate\src\service\roll_dice_service.rs:
+    1|       |use rand::Rng;
+    2|       |
+    3|       |// 二쇱궗?? 1~6 ?ъ씠??媛믪쓣 ?쒕뜡?섍쾶 諛섑솚
+    4|      2|pub fn roll_dice() -> i32 {
+    5|      2|    let mut rng = rand::thread_rng();
+    6|      2|    rng.gen_range(1..=6)
+    7|      2|}
+    8|       |
+    9|       |/* ?뚯뒪??媛??踰꾩쟾
+   10|       |pub fn roll_dice_with_rng<R: rand::Rng>(rng: &mut R) -> i32 {
+   11|       |    rng.gen_range(1..=6)
+   12|       |}
+   13|       |*/
+
+C:\Users\suresoft\Documents\sure_rust_project\project_seperate\src\service\salary_service.rs:
+    1|       |// ?붽툒 吏湲?議곌굔??異⑹”?섎뒗吏 ?먮떒
+    2|      3|pub fn calculate_salary(
+    3|      3|    prev_lap: i32,
+    4|      3|    new_lap: i32,
+    5|      3|    salary: i32,
+    6|      3|) -> i32 {
+    7|      3|    if new_lap > prev_lap {
+  ------------------
+  |  Branch (7:8): [Folded - Ignored]
+  |  Branch (7:8): [Folded - Ignored]
+  |  Branch (7:8): [True: 0, False: 0]
+  |  Branch (7:8): [True: 1, False: 2]
+  ------------------
+    8|      1|        salary
+    9|       |    } else {
+   10|      2|        0
+   11|       |    }
+   12|      3|}
+
+C:\Users\suresoft\Documents\sure_rust_project\project_seperate\src\service\turn_execute_service.rs:
+    1|       |use rusqlite::Connection;
+    2|       |
+    3|       |use crate::repository::{
+    4|       |    event_repo,
+    5|       |    player_repo,
+    6|       |    property_repo,
+    7|       |    transcaction_repo,
+    8|       |};
+    9|       |
+   10|       |use crate::service::turn_service::{TurnResult, TurnAction};
+   11|       |
+   12|       |pub trait TurnExecuteRepository {
+   13|       |    fn update_position_and_lap(&self, player_id: i32, pos: i32, lap: i32) -> rusqlite::Result<()>;
+   14|       |    fn update_money(&self, player_id: i32, delta: i32) -> rusqlite::Result<()>;
+   15|       |    fn bankrupt(&self, player_id: i32) -> rusqlite::Result<()>;
+   16|       |    fn set_owner(&self, tile_id: i32, owner_id: i32, price: i32) -> rusqlite::Result<()>;
+   17|       |    fn reset_owner_for_player(&self, player_id: i32) -> rusqlite::Result<()>;
+   18|       |    fn record_transaction(&self, player_id: i32, tx_type: &str, amount: i32, target: &str) -> rusqlite::Result<()>;
+   19|       |    fn add_fund(&self, amount: i32) -> rusqlite::Result<()>;
+   20|       |    fn reset_fund(&self) -> rusqlite::Result<()>;
+   21|       |}
+   22|       |
+   23|       |pub struct DbTurnExecuteRepository<'a> {
+   24|       |    conn: &'a Connection,
+   25|       |}
+   26|       |
+   27|       |impl<'a> DbTurnExecuteRepository<'a> {
+   28|      5|    pub fn new(conn: &'a Connection) -> Self {
+   29|      5|        Self { conn }
+   30|      5|    }
+   31|       |}
+   32|       |
+   33|       |impl<'a> TurnExecuteRepository for DbTurnExecuteRepository<'a> {
+   34|      5|    fn update_position_and_lap(&self, player_id: i32, pos: i32, lap: i32) -> rusqlite::Result<()> {
+   35|      5|        player_repo::update_position_and_lap(self.conn, player_id, pos, lap)
+   36|      5|    }
+   37|       |
+   38|      5|    fn update_money(&self, player_id: i32, delta: i32) -> rusqlite::Result<()> {
+   39|      5|        player_repo::update_money(self.conn, player_id, delta)
+   40|      5|    }
+   41|       |
+   42|      1|    fn bankrupt(&self, player_id: i32) -> rusqlite::Result<()> {
+   43|      1|        player_repo::bankrupt(self.conn, player_id)
+   44|      1|    }
+   45|       |
+   46|      1|    fn set_owner(&self, tile_id: i32, owner_id: i32, price: i32) -> rusqlite::Result<()> {
+   47|      1|        property_repo::set_owner(self.conn, tile_id, owner_id, price)
+   48|      1|    }
+   49|       |
+   50|      1|    fn reset_owner_for_player(&self, player_id: i32) -> rusqlite::Result<()> {
+   51|      1|        property_repo::reset_owner_for_player(self.conn, player_id)
+   52|      1|    }
+   53|       |
+   54|      5|    fn record_transaction(&self, player_id: i32, tx_type: &str, amount: i32, target: &str) -> rusqlite::Result<()> {
+   55|      5|        transcaction_repo::record_transaction(self.conn, player_id, tx_type, amount, target)
+   56|      5|    }
+   57|       |
+   58|      1|    fn add_fund(&self, amount: i32) -> rusqlite::Result<()> {
+   59|      1|        event_repo::add_fund(self.conn, amount)
+   60|      1|    }
+   61|       |
+   62|      1|    fn reset_fund(&self) -> rusqlite::Result<()> {
+   63|      1|        event_repo::reset_fund(self.conn)
+   64|      1|    }
+   65|       |}
+   66|       |
+   67|       |// process_turn ?⑥닔 ?ㅽ뻾 寃곌낵瑜?DB??諛섏쁺?섎뒗 ?⑥닔
+   68|     25|pub fn apply_turn_result_with_repo<R: TurnExecuteRepository>(
+   69|     25|    repo: &R,
+   70|     25|    player_id: i32,
+   71|     25|    result: &TurnResult,
+   72|     25|) -> rusqlite::Result<()> {
+   73|       |
+   74|       |    // ?꾩튂 + lap(諛뷀??? ?낅뜲?댄듃
+   75|     25|    repo.update_position_and_lap(
+   76|     25|        player_id,
+   77|     25|        result.new_position,
+   78|     25|        result.new_lap,
+   79|      1|    )?;
+   80|       |
+   81|       |    // ?붽툒 泥섎━ (?낃툑 ???댁뿭 湲곕줉)
+   82|     24|    if result.salary > 0 {
+  ------------------
+  |  Branch (82:8): [Folded - Ignored]
+  |  Branch (82:8): [Folded - Ignored]
+  |  Branch (82:8): [True: 0, False: 0]
+  |  Branch (82:8): [True: 2, False: 17]
+  |  Branch (82:8): [True: 0, False: 5]
+  ------------------
+   83|      2|        repo.update_money(player_id, result.salary)?;
+                                                                 ^0
+   84|       |
+   85|      2|        repo.record_transaction(
+   86|      2|            player_id,
+   87|      2|            "deposit",
+   88|      2|            result.salary,
+   89|      2|            "salary",
+   90|      1|        )?;
+   91|     22|    }
+   92|       |
+   93|       |    // ?≪뀡 泥섎━
+   94|     23|    match &result.action {
+   95|       |
+   96|       |        // ?좎? 援щℓ
+   97|      3|        TurnAction::Purchase { price } => {
+   98|      3|            repo.update_money(player_id, -*price)?;
+                                                               ^0
+   99|       |
+  100|      3|            repo.record_transaction(
+  101|      3|                player_id,
+  102|      3|                "withdraw",
+  103|      3|                *price,
+  104|      3|                &format!("tile{}_purchase", result.new_position),
+  105|      0|            )?;
+  106|       |
+  107|      3|            repo.set_owner(
+  108|      3|                result.new_position,
+  109|      3|                player_id,
+  110|      3|                *price,
+  111|      1|            )?;
+  112|       |        }
+  113|       |
+  114|       |        // ?듯뻾猷?吏湲?  115|      2|        TurnAction::PayToll { owner_id, amount } => {
+  116|       |            // ?붿븸 異쒓툑
+  117|      2|            repo.update_money(player_id, -*amount)?;
+                                                                ^0
+  118|      2|            repo.record_transaction(
+  119|      2|                player_id,
+  120|      2|                "withdraw",
+  121|      2|                *amount,
+  122|      2|                &format!("toll_to_{}", owner_id),
+  123|      0|            )?;
+  124|       |
+  125|       |            // ?좎? ?뚯쑀???붿븸 利앷?
+  126|      2|            repo.update_money(*owner_id, *amount)?;
+                                                               ^1
+  127|      1|            repo.record_transaction(
+  128|      1|                *owner_id,
+  129|      1|                "deposit",
+  130|      1|                *amount,
+  131|      1|                &format!("toll_from_{}", player_id),
+  132|      0|            )?;
+  133|       |        }
+  134|       |
+  135|       |        // ?뚯궛
+  136|      3|        TurnAction::Bankrupt { owner_id, paid } => {
+  137|       |            // ?뚯궛 ?뚮젅?댁뼱 ?붿븸??癒쇱? 李④컧?댁빞 嫄곕옒 ?????붿븸???щ컮瑜닿쾶 湲곕줉?쒕떎.
+  138|      3|            repo.update_money(player_id, -*paid)?;
+                                                              ^0
+  139|       |
+  140|       |            // ?붿븸???꾨? ?좎? ?뚯쑀?먯뿉寃?吏湲?  141|      3|            repo.update_money(*owner_id, *paid)?;
+                                                             ^0
+  142|      3|            repo.record_transaction(
+  143|      3|                *owner_id,
+  144|      3|                "deposit",
+  145|      3|                *paid,
+  146|      3|                &format!("bankrupt_from_{}", player_id),
+  147|      0|            )?;
+  148|       |
+  149|       |            // 異쒓툑 ?댁뿭 湲곕줉
+  150|      3|            repo.record_transaction(
+  151|      3|                player_id,
+  152|      3|                "withdraw",
+  153|      3|                *paid,
+  154|      3|                &format!("bankrupt_to_{}", owner_id),
+  155|      0|            )?;
+  156|       |
+  157|       |            // ?뚯쑀?덈뜕 ?좎? 珥덇린??  158|      3|            repo.reset_owner_for_player(player_id)?;
+                                                                ^0
+  159|       |
+  160|       |            // ?뚯궛 泥섎━
+  161|      3|            repo.bankrupt(player_id)?;
+                                                  ^1
+  162|       |        }
+  163|       |
+  164|       |        // ?대깽??A: ?ы쉶蹂듭?湲곌툑
+  165|      3|        TurnAction::EventWelfareFund { amount } => {
+  166|       |            // ??李④컧
+  167|      3|            repo.update_money(player_id, -*amount)?;
+                                                                ^0
+  168|       |
+  169|       |            // 湲곌툑 利앷?
+  170|      3|            repo.add_fund(*amount)?;
+                                                ^0
+  171|       |
+  172|       |            // 嫄곕옒 湲곕줉
+  173|      3|            repo.record_transaction(
+  174|      3|                player_id,
+  175|      3|                "withdraw",
+  176|      3|                *amount,
+  177|      3|                "welfare_fund",
+  178|      1|            )?;
+  179|       |        }
+  180|       |
+  181|       |        // ?대깽??A: ?뚯궛
+  182|      1|        TurnAction::EventWelfareFundBankrupt { paid } => {
+  183|       |            // 媛吏????꾨? 湲곌툑?쇰줈
+  184|      1|            repo.add_fund(*paid)?;
+                                              ^0
+  185|       |
+  186|       |            // 嫄곕옒 湲곕줉
+  187|      1|            repo.record_transaction(
+  188|      1|                player_id,
+  189|      1|                "withdraw",
+  190|      1|                *paid,
+  191|      1|                "welfare_fund_bankrupt",
+  192|      0|            )?;
+  193|       |
+  194|       |            // ?좎? 珥덇린??  195|      1|            repo.reset_owner_for_player(player_id)?;
+                                                                ^0
+  196|       |
+  197|       |            // ?뚯궛 泥섎━
+  198|      1|            repo.bankrupt(player_id)?;
+                                                  ^0
+  199|       |        }
+  200|       |
+  201|       |        // ?대깽??C: 湲곌툑 ?놁쓬
+  202|      1|        TurnAction::FundReceiveEmpty => {}
+  203|       |
+  204|       |        // ?대깽??C: 湲곌툑 ?섎졊
+  205|      3|        TurnAction::EventFundReceive { amount } => {
+  206|       |            // ?뚮젅?댁뼱 ??利앷?
+  207|      3|            repo.update_money(player_id, *amount)?;
+                                                               ^0
+  208|       |
+  209|       |            // 嫄곕옒 湲곕줉
+  210|      3|            repo.record_transaction(
+  211|      3|                player_id,
+  212|      3|                "deposit",
+  213|      3|                *amount,
+  214|      3|                "welfare_fund_receive",
+  215|      0|            )?;
+  216|       |
+  217|       |            // 湲곌툑 珥덇린??  218|      3|            repo.reset_fund()?;
+                                           ^1
+  219|       |        }
+  220|       |
+  221|      3|        TurnAction::None => {}
+  222|       |
+  223|      1|        TurnAction::EstateTaxSkipped => {}
+  224|       |
+  225|       |        // ?대깽??B: 醫낇빀遺?숈궛??  226|      2|        TurnAction::EstateTax { amount } => {
+  227|       |            // ?뚮젅?댁뼱 ??李④컧
+  228|      2|            repo.update_money(player_id, -*amount)?;
+                                                                ^0
+  229|       |
+  230|       |            // 嫄곕옒 湲곕줉
+  231|      2|            repo.record_transaction(
+  232|      2|                player_id,
+  233|      2|                "withdraw",
+  234|      2|                *amount,
+  235|      2|                "estate_tax",
+  236|      1|            )?;
+  237|       |        }
+  238|       |
+  239|       |        // ?대깽??B: ?뚯궛
+  240|      1|        TurnAction::EstateTaxBankrupt { paid } => {
+  241|       |            // 媛吏????꾨? 李④컧
+  242|      1|            repo.update_money(player_id, -*paid)?;
+                                                              ^0
+  243|       |
+  244|      1|            repo.record_transaction(
+  245|      1|                player_id,
+  246|      1|                "withdraw",
+  247|      1|                *paid,
+  248|      1|                "estate_tax_bankrupt",
+  249|      0|            )?;
+  250|       |
+  251|       |            // ?좎? 珥덇린??  252|      1|            repo.reset_owner_for_player(player_id)?;
+                                                                ^0
+  253|       |
+  254|       |            // ?뚯궛 泥섎━
+  255|      1|            repo.bankrupt(player_id)?;
+                                                  ^0
+  256|       |        }
+  257|       |    }
+  258|       |
+  259|     17|    Ok(())
+  260|     25|}
+  261|       |
+  262|       |// Connection 湲곕컲 wrapper (湲곗〈 ?몄텧遺 ?명솚)
+  263|      5|pub fn apply_turn_result(
+  264|      5|    conn: &Connection,
+  265|      5|    player_id: i32,
+  266|      5|    result: &TurnResult,
+  267|      5|) -> rusqlite::Result<()> {
+  268|      5|    let repo = DbTurnExecuteRepository::new(conn);
+  269|      5|    apply_turn_result_with_repo(&repo, player_id, result)
+  270|      5|}
+
+C:\Users\suresoft\Documents\sure_rust_project\project_seperate\src\service\turn_service.rs:
+    1|       |use rusqlite::Connection;
+    2|       |
+    3|       |use crate::service::{
+    4|       |    movement_service::move_player,
+    5|       |    salary_service::calculate_salary,
+    6|       |    buy_property_service::{decide_buy_property, BuyResult},
+    7|       |    roll_dice_service::roll_dice,
+    8|       |    event_service::{handle_event_with_conn, EventResult},
+    9|       |};
+   10|       |
+   11|       |pub trait TurnEventRepository {
+   12|       |    fn handle_event(&self, player_id: i32, tile_id: i32) -> EventResult;
+   13|       |}
+   14|       |
+   15|       |pub struct DbTurnEventRepository<'a> {
+   16|       |    conn: &'a Connection,
+   17|       |}
+   18|       |
+   19|       |impl<'a> DbTurnEventRepository<'a> {
+   20|      1|    pub fn new(conn: &'a Connection) -> Self {
+   21|      1|        Self { conn }
+   22|      1|    }
+   23|       |}
+   24|       |
+   25|       |impl<'a> TurnEventRepository for DbTurnEventRepository<'a> {
+   26|      1|    fn handle_event(&self, player_id: i32, tile_id: i32) -> EventResult {
+   27|      1|        handle_event_with_conn(self.conn, player_id, tile_id)
+   28|      1|    }
+   29|       |}
+   30|       |
+   31|       |#[derive(Clone, Debug, PartialEq, Eq)]
+   32|       |// ????吏꾪뻾???꾩슂???낅젰 ?곗씠??   33|       |pub struct TurnInput {
+   34|       |    pub player_id: i32,
+   35|       |    pub position: i32,
+   36|       |    pub lap: i32,
+   37|       |    pub money: i32,
+   38|       |
+   39|       |    pub total_tiles: i32,
+   40|       |
+   41|       |    pub tile_price: i32,
+   42|       |    pub tile_toll: i32,
+   43|       |    pub owner: Option<i32>,
+   44|       |
+   45|       |    pub will_buy: bool,
+   46|       |    pub tile_type: String,
+   47|       |}
+   48|       |
+   49|       |// ????吏꾪뻾 寃곌낵 ?곗씠??   50|       |#[derive(Clone, Debug, PartialEq, Eq)]
+   51|       |pub struct TurnResult {
+   52|       |    pub dice: i32,
+   53|       |    pub new_position: i32,
+   54|       |    pub new_lap: i32,
+   55|       |    pub salary: i32,
+   56|       |    pub action: TurnAction,
+   57|       |}
+   58|       |
+   59|       |// ?대룞留?泥섎━??以묎컙 寃곌낵 (援щℓ 寃곗젙 ???④퀎)
+   60|       |#[derive(Clone, Debug, PartialEq, Eq)]
+   61|       |pub struct MoveStep {
+   62|       |    pub dice: i32,
+   63|       |    pub new_position: i32,
+   64|       |    pub new_lap: i32,
+   65|       |    pub salary: i32,
+   66|       |}
+   67|       |
+   68|       |/// 二쇱궗??援대━湲?+ ?대룞 + ?붽툒 怨꾩궛 ?섑뻾 (援щℓ 寃곗젙 ?쒖쇅)
+   69|      1|pub fn roll_and_move(position: i32, lap: i32, total_tiles: i32) -> MoveStep {
+   70|      1|    let dice = roll_dice();
+   71|      1|    let move_result = move_player(position, lap, dice, total_tiles);
+   72|      1|    let salary = calculate_salary(lap, move_result.new_lap, 20);
+   73|      1|    MoveStep {
+   74|      1|        dice,
+   75|      1|        new_position: move_result.new_position,
+   76|      1|        new_lap: move_result.new_lap,
+   77|      1|        salary,
+   78|      1|    }
+   79|      1|}
+   80|       |
+   81|       |/// MoveStep + 援щℓ ?щ?濡?TurnResult ?앹꽦 (?듯뻾猷?援щℓ/?대깽??None 泥섎━)
+   82|     15|pub fn build_turn_result_with_repo<R: TurnEventRepository>(
+   83|     15|    repo: &R,
+   84|     15|    move_step: MoveStep,
+   85|     15|    player_id: i32,
+   86|     15|    money_after_salary: i32,
+   87|     15|    tile_price: i32,
+   88|     15|    tile_toll: i32,
+   89|     15|    tile_owner: Option<i32>,
+   90|     15|    will_buy: bool,
+   91|     15|    tile_type: &str,
+   92|     15|) -> TurnResult {
+   93|     15|    let action = if tile_type == "event" {
+  ------------------
+  |  Branch (93:21): [Folded - Ignored]
+  |  Branch (93:21): [Folded - Ignored]
+  |  Branch (93:21): [True: 0, False: 0]
+  |  Branch (93:21): [True: 8, False: 6]
+  |  Branch (93:21): [True: 1, False: 0]
+  ------------------
+   94|      9|        match repo.handle_event(player_id, move_step.new_position) {
+   95|      2|            EventResult::WelfareFund { amount } => TurnAction::EventWelfareFund { amount },
+   96|      1|            EventResult::WelfareFundBankrupt { paid } => TurnAction::EventWelfareFundBankrupt { paid },
+   97|      1|            EventResult::EstateTax { amount } => TurnAction::EstateTax { amount },
+   98|      1|            EventResult::EstateTaxBankrupt { paid } => TurnAction::EstateTaxBankrupt { paid },
+   99|      1|            EventResult::EstateTaxSkipped => TurnAction::EstateTaxSkipped,
+  100|      1|            EventResult::FundReceive { amount } => TurnAction::EventFundReceive { amount },
+  101|      1|            EventResult::FundReceiveEmpty => TurnAction::FundReceiveEmpty,
+  102|      1|            EventResult::None => TurnAction::None,
+  103|       |        }
+  104|       |    } else {
+  105|      6|        let buy_result = decide_buy_property(
+  106|      6|            player_id,
+  107|      6|            money_after_salary,
+  108|      6|            tile_price,
+  109|      6|            tile_toll,
+  110|      6|            tile_owner,
+  111|      6|            will_buy,
+  112|      6|            tile_type.to_string(),
+  113|       |        );
+  114|      6|        match buy_result {
+  115|      1|            BuyResult::PayToll { owner_id, amount } => TurnAction::PayToll { owner_id, amount },
+  116|      1|            BuyResult::Bankrupt { owner_id, paid } => TurnAction::Bankrupt { owner_id, paid },
+  117|      1|            BuyResult::Purchase { price } => TurnAction::Purchase { price },
+  118|      3|            BuyResult::NotEnoughMoney | BuyResult::Skip => TurnAction::None,
+  119|       |        }
+  120|       |    };
+  121|       |
+  122|     15|    TurnResult {
+  123|     15|        dice: move_step.dice,
+  124|     15|        new_position: move_step.new_position,
+  125|     15|        new_lap: move_step.new_lap,
+  126|     15|        salary: move_step.salary,
+  127|     15|        action,
+  128|     15|    }
+  129|     15|}
+  130|       |
+  131|       |/// Connection 湲곕컲 wrapper (湲곗〈 ?몄텧遺 ?명솚)
+  132|      1|pub fn build_turn_result(
+  133|      1|    conn: &Connection,
+  134|      1|    move_step: MoveStep,
+  135|      1|    player_id: i32,
+  136|      1|    money_after_salary: i32,
+  137|      1|    tile_price: i32,
+  138|      1|    tile_toll: i32,
+  139|      1|    tile_owner: Option<i32>,
+  140|      1|    will_buy: bool,
+  141|      1|    tile_type: &str,
+  142|      1|) -> TurnResult {
+  143|      1|    let repo = DbTurnEventRepository::new(conn);
+  144|      1|    build_turn_result_with_repo(
+  145|      1|        &repo,
+  146|      1|        move_step,
+  147|      1|        player_id,
+  148|      1|        money_after_salary,
+  149|      1|        tile_price,
+  150|      1|        tile_toll,
+  151|      1|        tile_owner,
+  152|      1|        will_buy,
+  153|      1|        tile_type,
+  154|       |    )
+  155|      1|}
+  156|       |
+  157|       |// ???숈븞 諛쒖깮???됰룞 醫낅쪟
+  158|       |#[derive(Clone, Debug, PartialEq, Eq)]
+  159|       |pub enum TurnAction {
+  160|       |    None,
+  161|       |    PayToll { owner_id: i32, amount: i32 },
+  162|       |    Purchase { price: i32 },
+  163|       |    Bankrupt { owner_id: i32, paid: i32 },
+  164|       |    EventWelfareFund { amount: i32 },
+  165|       |    EventWelfareFundBankrupt { paid: i32 },
+  166|       |    EventFundReceive { amount: i32 },
+  167|       |    FundReceiveEmpty,
+  168|       |    EstateTax { amount: i32 },
+  169|       |    EstateTaxBankrupt { paid: i32 },
+  170|       |    EstateTaxSkipped,
+  171|       |}
+

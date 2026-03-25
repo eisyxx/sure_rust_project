@@ -8,6 +8,10 @@ use project::service::turn_execute_service::{
 use project::service::turn_service::{TurnAction, TurnResult};
 use rusqlite::Connection;
 
+fn any_err() -> rusqlite::Error {
+    rusqlite::Error::InvalidQuery
+}
+
 mock! {
     ExecRepo {}
 
@@ -329,4 +333,263 @@ fn test_apply_turn_result_with_conn_fund_receive_path() {
         .query_row("SELECT amount FROM fund", [], |row| row.get(0))
         .unwrap();
     assert_eq!(fund, 0);
+}
+
+#[test]
+fn test_error_on_update_position_and_lap() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::None, 0);
+
+    repo.expect_update_position_and_lap()
+        .times(1)
+        .returning(|_, _, _| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_salary_deposit_transaction() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::None, 10);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_update_money().with(eq(1), eq(10)).times(1).returning(|_, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(1), eq("deposit"), eq(10), eq("salary"))
+        .times(1)
+        .returning(|_, _, _, _| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_purchase_set_owner() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::Purchase { price: 50 }, 0);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_update_money().with(eq(1), eq(-50)).times(1).returning(|_, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(1), eq("withdraw"), eq(50), eq("tile10_purchase"))
+        .times(1)
+        .returning(|_, _, _, _| Ok(()));
+    repo.expect_set_owner().with(eq(10), eq(1), eq(50)).times(1).returning(|_, _, _| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_pay_toll_second_transfer() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::PayToll { owner_id: 2, amount: 30 }, 0);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_update_money().with(eq(1), eq(-30)).times(1).returning(|_, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(1), eq("withdraw"), eq(30), eq("toll_to_2"))
+        .times(1)
+        .returning(|_, _, _, _| Ok(()));
+    repo.expect_update_money().with(eq(2), eq(30)).times(1).returning(|_, _| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_bankrupt_finalize() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::Bankrupt { owner_id: 2, paid: 40 }, 0);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_update_money().with(eq(1), eq(-40)).times(1).returning(|_, _| Ok(()));
+    repo.expect_update_money().with(eq(2), eq(40)).times(1).returning(|_, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(2), eq("deposit"), eq(40), eq("bankrupt_from_1"))
+        .times(1)
+        .returning(|_, _, _, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(1), eq("withdraw"), eq(40), eq("bankrupt_to_2"))
+        .times(1)
+        .returning(|_, _, _, _| Ok(()));
+    repo.expect_reset_owner_for_player().with(eq(1)).times(1).returning(|_| Ok(()));
+    repo.expect_bankrupt().with(eq(1)).times(1).returning(|_| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_welfare_fund_transaction() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::EventWelfareFund { amount: 25 }, 0);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_update_money().with(eq(1), eq(-25)).times(1).returning(|_, _| Ok(()));
+    repo.expect_add_fund().with(eq(25)).times(1).returning(|_| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(1), eq("withdraw"), eq(25), eq("welfare_fund"))
+        .times(1)
+        .returning(|_, _, _, _| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_fund_receive_reset() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::EventFundReceive { amount: 70 }, 0);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_update_money().with(eq(1), eq(70)).times(1).returning(|_, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(1), eq("deposit"), eq(70), eq("welfare_fund_receive"))
+        .times(1)
+        .returning(|_, _, _, _| Ok(()));
+    repo.expect_reset_fund().times(1).returning(|| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_estate_tax_transaction() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::EstateTax { amount: 33 }, 0);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_update_money().with(eq(1), eq(-33)).times(1).returning(|_, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(1), eq("withdraw"), eq(33), eq("estate_tax"))
+        .times(1)
+        .returning(|_, _, _, _| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_purchase_withdraw_transaction() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::Purchase { price: 50 }, 0);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_update_money().with(eq(1), eq(-50)).times(1).returning(|_, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(1), eq("withdraw"), eq(50), eq("tile10_purchase"))
+        .times(1)
+        .returning(|_, _, _, _| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_pay_toll_from_player_transaction() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::PayToll { owner_id: 2, amount: 30 }, 0);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_update_money().with(eq(1), eq(-30)).times(1).returning(|_, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(1), eq("withdraw"), eq(30), eq("toll_to_2"))
+        .times(1)
+        .returning(|_, _, _, _| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_pay_toll_to_owner_transaction() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::PayToll { owner_id: 2, amount: 30 }, 0);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_update_money().with(eq(1), eq(-30)).times(1).returning(|_, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(1), eq("withdraw"), eq(30), eq("toll_to_2"))
+        .times(1)
+        .returning(|_, _, _, _| Ok(()));
+    repo.expect_update_money().with(eq(2), eq(30)).times(1).returning(|_, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(2), eq("deposit"), eq(30), eq("toll_from_1"))
+        .times(1)
+        .returning(|_, _, _, _| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_bankrupt_deposit_transaction() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::Bankrupt { owner_id: 2, paid: 40 }, 0);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_update_money().with(eq(1), eq(-40)).times(1).returning(|_, _| Ok(()));
+    repo.expect_update_money().with(eq(2), eq(40)).times(1).returning(|_, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(2), eq("deposit"), eq(40), eq("bankrupt_from_1"))
+        .times(1)
+        .returning(|_, _, _, _| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_bankrupt_withdraw_transaction() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::Bankrupt { owner_id: 2, paid: 40 }, 0);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_update_money().with(eq(1), eq(-40)).times(1).returning(|_, _| Ok(()));
+    repo.expect_update_money().with(eq(2), eq(40)).times(1).returning(|_, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(2), eq("deposit"), eq(40), eq("bankrupt_from_1"))
+        .times(1)
+        .returning(|_, _, _, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(1), eq("withdraw"), eq(40), eq("bankrupt_to_2"))
+        .times(1)
+        .returning(|_, _, _, _| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_welfare_fund_bankrupt_transaction() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::EventWelfareFundBankrupt { paid: 15 }, 0);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_add_fund().with(eq(15)).times(1).returning(|_| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(1), eq("withdraw"), eq(15), eq("welfare_fund_bankrupt"))
+        .times(1)
+        .returning(|_, _, _, _| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_fund_receive_deposit_transaction() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::EventFundReceive { amount: 70 }, 0);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_update_money().with(eq(1), eq(70)).times(1).returning(|_, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(1), eq("deposit"), eq(70), eq("welfare_fund_receive"))
+        .times(1)
+        .returning(|_, _, _, _| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
+}
+
+#[test]
+fn test_error_on_estate_tax_bankrupt_transaction() {
+    let mut repo = MockExecRepo::new();
+    let result = make_result(TurnAction::EstateTaxBankrupt { paid: 22 }, 0);
+
+    repo.expect_update_position_and_lap().times(1).returning(|_, _, _| Ok(()));
+    repo.expect_update_money().with(eq(1), eq(-22)).times(1).returning(|_, _| Ok(()));
+    repo.expect_record_transaction()
+        .with(eq(1), eq("withdraw"), eq(22), eq("estate_tax_bankrupt"))
+        .times(1)
+        .returning(|_, _, _, _| Err(any_err()));
+
+    assert!(apply_turn_result_with_repo(&repo, 1, &result).is_err());
 }

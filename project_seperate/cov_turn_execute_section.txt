@@ -1,0 +1,291 @@
+﻿C:\Users\suresoft\Documents\sure_rust_project\project_seperate\src\service\turn_execute_service.rs:
+    1|       |use rusqlite::Connection;
+    2|       |
+    3|       |use crate::repository::{
+    4|       |    event_repo,
+    5|       |    player_repo,
+    6|       |    property_repo,
+    7|       |    transcaction_repo,
+    8|       |};
+    9|       |
+   10|       |use crate::service::turn_service::{TurnResult, TurnAction};
+   11|       |
+   12|       |pub trait TurnExecuteRepository {
+   13|       |    fn update_position_and_lap(&self, player_id: i32, pos: i32, lap: i32) -> rusqlite::Result<()>;
+   14|       |    fn update_money(&self, player_id: i32, delta: i32) -> rusqlite::Result<()>;
+   15|       |    fn bankrupt(&self, player_id: i32) -> rusqlite::Result<()>;
+   16|       |    fn set_owner(&self, tile_id: i32, owner_id: i32, price: i32) -> rusqlite::Result<()>;
+   17|       |    fn reset_owner_for_player(&self, player_id: i32) -> rusqlite::Result<()>;
+   18|       |    fn record_transaction(&self, player_id: i32, tx_type: &str, amount: i32, target: &str) -> rusqlite::Result<()>;
+   19|       |    fn add_fund(&self, amount: i32) -> rusqlite::Result<()>;
+   20|       |    fn reset_fund(&self) -> rusqlite::Result<()>;
+   21|       |}
+   22|       |
+   23|       |pub struct DbTurnExecuteRepository<'a> {
+   24|       |    conn: &'a Connection,
+   25|       |}
+   26|       |
+   27|       |impl<'a> DbTurnExecuteRepository<'a> {
+   28|      5|    pub fn new(conn: &'a Connection) -> Self {
+   29|      5|        Self { conn }
+   30|      5|    }
+   31|       |}
+   32|       |
+   33|       |impl<'a> TurnExecuteRepository for DbTurnExecuteRepository<'a> {
+   34|      5|    fn update_position_and_lap(&self, player_id: i32, pos: i32, lap: i32) -> rusqlite::Result<()> {
+   35|      5|        player_repo::update_position_and_lap(self.conn, player_id, pos, lap)
+   36|      5|    }
+   37|       |
+   38|      5|    fn update_money(&self, player_id: i32, delta: i32) -> rusqlite::Result<()> {
+   39|      5|        player_repo::update_money(self.conn, player_id, delta)
+   40|      5|    }
+   41|       |
+   42|      1|    fn bankrupt(&self, player_id: i32) -> rusqlite::Result<()> {
+   43|      1|        player_repo::bankrupt(self.conn, player_id)
+   44|      1|    }
+   45|       |
+   46|      1|    fn set_owner(&self, tile_id: i32, owner_id: i32, price: i32) -> rusqlite::Result<()> {
+   47|      1|        property_repo::set_owner(self.conn, tile_id, owner_id, price)
+   48|      1|    }
+   49|       |
+   50|      1|    fn reset_owner_for_player(&self, player_id: i32) -> rusqlite::Result<()> {
+   51|      1|        property_repo::reset_owner_for_player(self.conn, player_id)
+   52|      1|    }
+   53|       |
+   54|      5|    fn record_transaction(&self, player_id: i32, tx_type: &str, amount: i32, target: &str) -> rusqlite::Result<()> {
+   55|      5|        transcaction_repo::record_transaction(self.conn, player_id, tx_type, amount, target)
+   56|      5|    }
+   57|       |
+   58|      1|    fn add_fund(&self, amount: i32) -> rusqlite::Result<()> {
+   59|      1|        event_repo::add_fund(self.conn, amount)
+   60|      1|    }
+   61|       |
+   62|      1|    fn reset_fund(&self) -> rusqlite::Result<()> {
+   63|      1|        event_repo::reset_fund(self.conn)
+   64|      1|    }
+   65|       |}
+   66|       |
+   67|       |// process_turn ?⑥닔 ?ㅽ뻾 寃곌낵瑜?DB??諛섏쁺?섎뒗 ?⑥닔
+   68|     25|pub fn apply_turn_result_with_repo<R: TurnExecuteRepository>(
+   69|     25|    repo: &R,
+   70|     25|    player_id: i32,
+   71|     25|    result: &TurnResult,
+   72|     25|) -> rusqlite::Result<()> {
+   73|       |
+   74|       |    // ?꾩튂 + lap(諛뷀??? ?낅뜲?댄듃
+   75|     25|    repo.update_position_and_lap(
+   76|     25|        player_id,
+   77|     25|        result.new_position,
+   78|     25|        result.new_lap,
+   79|      1|    )?;
+   80|       |
+   81|       |    // ?붽툒 泥섎━ (?낃툑 ???댁뿭 湲곕줉)
+   82|     24|    if result.salary > 0 {
+  ------------------
+  |  Branch (82:8): [Folded - Ignored]
+  |  Branch (82:8): [Folded - Ignored]
+  |  Branch (82:8): [True: 0, False: 0]
+  |  Branch (82:8): [True: 2, False: 17]
+  |  Branch (82:8): [True: 0, False: 5]
+  ------------------
+   83|      2|        repo.update_money(player_id, result.salary)?;
+                                                                 ^0
+   84|       |
+   85|      2|        repo.record_transaction(
+   86|      2|            player_id,
+   87|      2|            "deposit",
+   88|      2|            result.salary,
+   89|      2|            "salary",
+   90|      1|        )?;
+   91|     22|    }
+   92|       |
+   93|       |    // ?≪뀡 泥섎━
+   94|     23|    match &result.action {
+   95|       |
+   96|       |        // ?좎? 援щℓ
+   97|      3|        TurnAction::Purchase { price } => {
+   98|      3|            repo.update_money(player_id, -*price)?;
+                                                               ^0
+   99|       |
+  100|      3|            repo.record_transaction(
+  101|      3|                player_id,
+  102|      3|                "withdraw",
+  103|      3|                *price,
+  104|      3|                &format!("tile{}_purchase", result.new_position),
+  105|      0|            )?;
+  106|       |
+  107|      3|            repo.set_owner(
+  108|      3|                result.new_position,
+  109|      3|                player_id,
+  110|      3|                *price,
+  111|      1|            )?;
+  112|       |        }
+  113|       |
+  114|       |        // ?듯뻾猷?吏湲?  115|      2|        TurnAction::PayToll { owner_id, amount } => {
+  116|       |            // ?붿븸 異쒓툑
+  117|      2|            repo.update_money(player_id, -*amount)?;
+                                                                ^0
+  118|      2|            repo.record_transaction(
+  119|      2|                player_id,
+  120|      2|                "withdraw",
+  121|      2|                *amount,
+  122|      2|                &format!("toll_to_{}", owner_id),
+  123|      0|            )?;
+  124|       |
+  125|       |            // ?좎? ?뚯쑀???붿븸 利앷?
+  126|      2|            repo.update_money(*owner_id, *amount)?;
+                                                               ^1
+  127|      1|            repo.record_transaction(
+  128|      1|                *owner_id,
+  129|      1|                "deposit",
+  130|      1|                *amount,
+  131|      1|                &format!("toll_from_{}", player_id),
+  132|      0|            )?;
+  133|       |        }
+  134|       |
+  135|       |        // ?뚯궛
+  136|      3|        TurnAction::Bankrupt { owner_id, paid } => {
+  137|       |            // ?뚯궛 ?뚮젅?댁뼱 ?붿븸??癒쇱? 李④컧?댁빞 嫄곕옒 ?????붿븸???щ컮瑜닿쾶 湲곕줉?쒕떎.
+  138|      3|            repo.update_money(player_id, -*paid)?;
+                                                              ^0
+  139|       |
+  140|       |            // ?붿븸???꾨? ?좎? ?뚯쑀?먯뿉寃?吏湲?  141|      3|            repo.update_money(*owner_id, *paid)?;
+                                                             ^0
+  142|      3|            repo.record_transaction(
+  143|      3|                *owner_id,
+  144|      3|                "deposit",
+  145|      3|                *paid,
+  146|      3|                &format!("bankrupt_from_{}", player_id),
+  147|      0|            )?;
+  148|       |
+  149|       |            // 異쒓툑 ?댁뿭 湲곕줉
+  150|      3|            repo.record_transaction(
+  151|      3|                player_id,
+  152|      3|                "withdraw",
+  153|      3|                *paid,
+  154|      3|                &format!("bankrupt_to_{}", owner_id),
+  155|      0|            )?;
+  156|       |
+  157|       |            // ?뚯쑀?덈뜕 ?좎? 珥덇린??  158|      3|            repo.reset_owner_for_player(player_id)?;
+                                                                ^0
+  159|       |
+  160|       |            // ?뚯궛 泥섎━
+  161|      3|            repo.bankrupt(player_id)?;
+                                                  ^1
+  162|       |        }
+  163|       |
+  164|       |        // ?대깽??A: ?ы쉶蹂듭?湲곌툑
+  165|      3|        TurnAction::EventWelfareFund { amount } => {
+  166|       |            // ??李④컧
+  167|      3|            repo.update_money(player_id, -*amount)?;
+                                                                ^0
+  168|       |
+  169|       |            // 湲곌툑 利앷?
+  170|      3|            repo.add_fund(*amount)?;
+                                                ^0
+  171|       |
+  172|       |            // 嫄곕옒 湲곕줉
+  173|      3|            repo.record_transaction(
+  174|      3|                player_id,
+  175|      3|                "withdraw",
+  176|      3|                *amount,
+  177|      3|                "welfare_fund",
+  178|      1|            )?;
+  179|       |        }
+  180|       |
+  181|       |        // ?대깽??A: ?뚯궛
+  182|      1|        TurnAction::EventWelfareFundBankrupt { paid } => {
+  183|       |            // 媛吏????꾨? 湲곌툑?쇰줈
+  184|      1|            repo.add_fund(*paid)?;
+                                              ^0
+  185|       |
+  186|       |            // 嫄곕옒 湲곕줉
+  187|      1|            repo.record_transaction(
+  188|      1|                player_id,
+  189|      1|                "withdraw",
+  190|      1|                *paid,
+  191|      1|                "welfare_fund_bankrupt",
+  192|      0|            )?;
+  193|       |
+  194|       |            // ?좎? 珥덇린??  195|      1|            repo.reset_owner_for_player(player_id)?;
+                                                                ^0
+  196|       |
+  197|       |            // ?뚯궛 泥섎━
+  198|      1|            repo.bankrupt(player_id)?;
+                                                  ^0
+  199|       |        }
+  200|       |
+  201|       |        // ?대깽??C: 湲곌툑 ?놁쓬
+  202|      1|        TurnAction::FundReceiveEmpty => {}
+  203|       |
+  204|       |        // ?대깽??C: 湲곌툑 ?섎졊
+  205|      3|        TurnAction::EventFundReceive { amount } => {
+  206|       |            // ?뚮젅?댁뼱 ??利앷?
+  207|      3|            repo.update_money(player_id, *amount)?;
+                                                               ^0
+  208|       |
+  209|       |            // 嫄곕옒 湲곕줉
+  210|      3|            repo.record_transaction(
+  211|      3|                player_id,
+  212|      3|                "deposit",
+  213|      3|                *amount,
+  214|      3|                "welfare_fund_receive",
+  215|      0|            )?;
+  216|       |
+  217|       |            // 湲곌툑 珥덇린??  218|      3|            repo.reset_fund()?;
+                                           ^1
+  219|       |        }
+  220|       |
+  221|      3|        TurnAction::None => {}
+  222|       |
+  223|      1|        TurnAction::EstateTaxSkipped => {}
+  224|       |
+  225|       |        // ?대깽??B: 醫낇빀遺?숈궛??  226|      2|        TurnAction::EstateTax { amount } => {
+  227|       |            // ?뚮젅?댁뼱 ??李④컧
+  228|      2|            repo.update_money(player_id, -*amount)?;
+                                                                ^0
+  229|       |
+  230|       |            // 嫄곕옒 湲곕줉
+  231|      2|            repo.record_transaction(
+  232|      2|                player_id,
+  233|      2|                "withdraw",
+  234|      2|                *amount,
+  235|      2|                "estate_tax",
+  236|      1|            )?;
+  237|       |        }
+  238|       |
+  239|       |        // ?대깽??B: ?뚯궛
+  240|      1|        TurnAction::EstateTaxBankrupt { paid } => {
+  241|       |            // 媛吏????꾨? 李④컧
+  242|      1|            repo.update_money(player_id, -*paid)?;
+                                                              ^0
+  243|       |
+  244|      1|            repo.record_transaction(
+  245|      1|                player_id,
+  246|      1|                "withdraw",
+  247|      1|                *paid,
+  248|      1|                "estate_tax_bankrupt",
+  249|      0|            )?;
+  250|       |
+  251|       |            // ?좎? 珥덇린??  252|      1|            repo.reset_owner_for_player(player_id)?;
+                                                                ^0
+  253|       |
+  254|       |            // ?뚯궛 泥섎━
+  255|      1|            repo.bankrupt(player_id)?;
+                                                  ^0
+  256|       |        }
+  257|       |    }
+  258|       |
+  259|     17|    Ok(())
+  260|     25|}
+  261|       |
+  262|       |// Connection 湲곕컲 wrapper (湲곗〈 ?몄텧遺 ?명솚)
+  263|      5|pub fn apply_turn_result(
+  264|      5|    conn: &Connection,
+  265|      5|    player_id: i32,
+  266|      5|    result: &TurnResult,
+  267|      5|) -> rusqlite::Result<()> {
+  268|      5|    let repo = DbTurnExecuteRepository::new(conn);
+  269|      5|    apply_turn_result_with_repo(&repo, player_id, result)
+  270|      5|}
+

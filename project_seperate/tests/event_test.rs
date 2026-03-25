@@ -30,6 +30,20 @@ mock! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use project::service::event_service::{DbEventRepository, handle_event_with_conn};
+    use rusqlite::Connection;
+
+    fn setup_event_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+
+        conn.execute("CREATE TABLE event_tiles (tile_id INTEGER, event_type TEXT, amount INTEGER)", []).unwrap();
+        conn.execute("CREATE TABLE players (id INTEGER, money INTEGER)", []).unwrap();
+        conn.execute("CREATE TABLE properties (tile_id INTEGER, owner_id INTEGER, price INTEGER)", []).unwrap();
+        conn.execute("CREATE TABLE fund (amount INTEGER)", []).unwrap();
+        conn.execute("INSERT INTO fund VALUES (0)", []).unwrap();
+
+        conn
+    }
 
     // ============================================
     // fund_add (사회복지기금) 테스트
@@ -426,5 +440,48 @@ mod tests {
 
         let result = handle_event(&repo, 1, 1);
         assert_eq!(result, EventResult::WelfareFund { amount: 1000000 });
+    }
+
+    #[test]
+    fn test_db_event_repository_methods() {
+        let conn = setup_event_db();
+
+        conn.execute("INSERT INTO event_tiles VALUES (1, 'fund_add', 20)", []).unwrap();
+        conn.execute("INSERT INTO players VALUES (1, 80)", []).unwrap();
+        conn.execute("INSERT INTO properties VALUES (10, 1, 120)", []).unwrap();
+        conn.execute("UPDATE fund SET amount = 35", []).unwrap();
+
+        let repo = DbEventRepository::new(&conn);
+
+        assert_eq!(repo.get_event_info(1).unwrap(), ("fund_add".to_string(), 20));
+        assert_eq!(repo.get_player_money(1).unwrap(), 80);
+        assert_eq!(repo.get_player_total_property_price(1).unwrap(), 120);
+        assert_eq!(repo.get_fund_amount().unwrap(), 35);
+    }
+
+    #[test]
+    fn test_handle_event_with_conn_paths() {
+        let conn = setup_event_db();
+
+        conn.execute("INSERT INTO players VALUES (1, 100)", []).unwrap();
+        conn.execute("INSERT INTO properties VALUES (20, 1, 200)", []).unwrap();
+        conn.execute("UPDATE fund SET amount = 50", []).unwrap();
+
+        conn.execute("INSERT INTO event_tiles VALUES (1, 'fund_add', 30)", []).unwrap();
+        conn.execute("INSERT INTO event_tiles VALUES (2, 'tax_if_property', 40)", []).unwrap();
+        conn.execute("INSERT INTO event_tiles VALUES (3, 'fund_take', 0)", []).unwrap();
+
+        assert_eq!(handle_event_with_conn(&conn, 1, 1), EventResult::WelfareFund { amount: 30 });
+        assert_eq!(handle_event_with_conn(&conn, 1, 2), EventResult::EstateTax { amount: 40 });
+        assert_eq!(handle_event_with_conn(&conn, 1, 3), EventResult::FundReceive { amount: 50 });
+    }
+
+    #[test]
+    fn test_handle_event_with_conn_event_lookup_fail() {
+        let conn = setup_event_db();
+        conn.execute("INSERT INTO players VALUES (1, 100)", []).unwrap();
+
+        let result = handle_event_with_conn(&conn, 1, 999);
+        assert_eq!(result, EventResult::None);
     }
 }
