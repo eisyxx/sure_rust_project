@@ -6,9 +6,8 @@ use crate::service::{
     buy_property_service::{decide_buy_property, BuyResult},
     roll_dice_service::roll_dice,
     event_service::{handle_event, EventResult},
+    traits::TurnServiceDeps,
 };
-use crate::repository::tile_repo::get_tile_info;
-use crate::repository::property_repo::get_owner;
 
 #[derive(Clone)]
 // 한 턴 진행에 필요한 입력 데이터
@@ -45,9 +44,24 @@ pub struct MoveStep {
     pub salary: i32,
 }
 
-/// 주사위 굴리기 + 이동 + 월급 계산 수행 (구매 결정 제외)
-pub fn roll_and_move(position: i32, lap: i32, total_tiles: i32) -> MoveStep {
-    let dice = roll_dice();
+pub struct TurnServiceDepsImpl;
+
+impl TurnServiceDeps for TurnServiceDepsImpl {
+    fn roll_dice(&self) -> i32 {
+        roll_dice()
+    }
+    fn handle_event(&self, conn: &Connection, player_id: i32, tile_id: i32) -> EventResult {
+        handle_event(conn, player_id, tile_id)
+    }
+}
+
+pub fn roll_and_move_with_deps<D: TurnServiceDeps>(
+    deps: &D,
+    position: i32,
+    lap: i32,
+    total_tiles: i32,
+) -> MoveStep {
+    let dice = deps.roll_dice();
     let move_result = move_player(position, lap, dice, total_tiles);
     let salary = calculate_salary(lap, move_result.new_lap, 20);
     MoveStep {
@@ -58,8 +72,13 @@ pub fn roll_and_move(position: i32, lap: i32, total_tiles: i32) -> MoveStep {
     }
 }
 
-/// MoveStep + 구매 여부로 TurnResult 생성 (통행료/구매/이벤트/None 처리)
-pub fn build_turn_result(
+/// 주사위 굴리기 + 이동 + 월급 계산 수행 (구매 결정 제외)
+pub fn roll_and_move(position: i32, lap: i32, total_tiles: i32) -> MoveStep {
+    roll_and_move_with_deps(&TurnServiceDepsImpl, position, lap, total_tiles)
+}
+
+pub fn build_turn_result_with_deps<D: TurnServiceDeps>(
+    deps: &D,
     conn: &Connection,
     move_step: MoveStep,
     player_id: i32,
@@ -71,7 +90,7 @@ pub fn build_turn_result(
     tile_type: &str,
 ) -> TurnResult {
     let action = if tile_type == "event" {
-        match handle_event(conn, player_id, move_step.new_position) {
+        match deps.handle_event(conn, player_id, move_step.new_position) {
             EventResult::WelfareFund { amount } => TurnAction::EventWelfareFund { amount },
             EventResult::WelfareFundBankrupt { paid } => TurnAction::EventWelfareFundBankrupt { paid },
             EventResult::EstateTax { amount } => TurnAction::EstateTax { amount },
@@ -108,8 +127,26 @@ pub fn build_turn_result(
     }
 }
 
+/// MoveStep + 구매 여부로 TurnResult 생성 (통행료/구매/이벤트/None 처리)
+pub fn build_turn_result(
+    conn: &Connection,
+    move_step: MoveStep,
+    player_id: i32,
+    money_after_salary: i32,
+    tile_price: i32,
+    tile_toll: i32,
+    tile_owner: Option<i32>,
+    will_buy: bool,
+    tile_type: &str,
+) -> TurnResult {
+    build_turn_result_with_deps(
+        &TurnServiceDepsImpl, conn, move_step, player_id,
+        money_after_salary, tile_price, tile_toll, tile_owner, will_buy, tile_type,
+    )
+}
+
 // 턴 동안 발생한 행동 종류
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TurnAction {
     None,
     PayToll { owner_id: i32, amount: i32 },
