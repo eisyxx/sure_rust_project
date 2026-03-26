@@ -7,7 +7,7 @@
 
 #[cfg(test)]
 mod tests {
-    use project::service::turn_service::{build_turn_result, MoveStep, TurnAction, TurnInput, TurnResult};
+    use crate::service::turn_service::{build_turn_result, MoveStep, TurnAction, TurnInput, TurnResult};
     use rusqlite::Connection;
 
     #[test]

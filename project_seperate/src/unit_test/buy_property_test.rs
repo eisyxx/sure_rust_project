@@ -11,7 +11,7 @@ tile_type == "start" → Skip
 
 #[cfg(test)]
 mod tests {
-    use project::service::buy_property_service::{decide_buy_property, BuyResult};
+    use crate::service::buy_property_service::{decide_buy_property, BuyResult};
 
     #[test]
     fn test_pay_toll() {

@@ -8,7 +8,7 @@
 
 #[cfg(test)]
 mod tests {
-    use project::service::game_end_service::{check_game_end, Player};
+    use crate::service::game_end_service::{check_game_end, Player};
 
     #[test]
     fn test_all_bankrupt() {

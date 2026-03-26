@@ -7,8 +7,8 @@ Bankrupt → 파산 처리 + 토지 초기화
 
 #[cfg(test)]
 mod tests {
-    use project::service::turn_execute_service::apply_turn_result;
-    use project::service::turn_service::{TurnAction, TurnResult};
+    use crate::service::turn_execute_service::apply_turn_result;
+    use crate::service::turn_service::{TurnAction, TurnResult};
 
     use rusqlite::Connection;
 

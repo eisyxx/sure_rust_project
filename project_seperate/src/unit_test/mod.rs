@@ -1,0 +1,10 @@
+pub mod common;
+
+mod buy_property_test;
+mod event_test;
+mod game_end_test;
+mod movement_test;
+mod roll_dice_test;
+mod salary_test;
+mod turn_execute_test;
+mod turn_test;

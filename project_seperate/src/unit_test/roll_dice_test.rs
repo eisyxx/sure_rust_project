@@ -4,7 +4,7 @@
 
 #[cfg(test)]
 mod tests {
-    use project::service::roll_dice_service::roll_dice;
+    use crate::service::roll_dice_service::roll_dice;
 
     #[test]
     fn test_dice_range() {
