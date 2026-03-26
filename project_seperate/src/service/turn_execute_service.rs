@@ -7,16 +7,49 @@ use crate::repository::{
 };
 
 use crate::service::turn_service::{TurnResult, TurnAction};
+use crate::service::traits::TurnExecuteRepo;
 
-// process_turn 함수 실행 결과를 DB에 반영하는 함수
-pub fn apply_turn_result(
+pub struct TurnExecuteRepoImpl;
+
+impl TurnExecuteRepo for TurnExecuteRepoImpl {
+    fn update_position_and_lap(&self, conn: &Connection, player_id: i32, pos: i32, lap: i32) -> rusqlite::Result<()> {
+        update_position_and_lap(conn, player_id, pos, lap)
+    }
+    fn update_money(&self, conn: &Connection, player_id: i32, delta: i32) -> rusqlite::Result<()> {
+        update_money(conn, player_id, delta)
+    }
+    fn record_transaction(&self, conn: &Connection, player_id: i32, tx_type: &str, amount: i32, target: &str) -> rusqlite::Result<()> {
+        record_transaction(conn, player_id, tx_type, amount, target)
+    }
+    fn set_owner(&self, conn: &Connection, tile_id: i32, player_id: i32, price: i32) -> rusqlite::Result<()> {
+        set_owner(conn, tile_id, player_id, price)
+    }
+    fn reset_owner_for_player(&self, conn: &Connection, player_id: i32) -> rusqlite::Result<()> {
+        reset_owner_for_player(conn, player_id)
+    }
+    fn bankrupt(&self, conn: &Connection, player_id: i32) -> rusqlite::Result<()> {
+        bankrupt(conn, player_id)
+    }
+    fn add_fund(&self, conn: &Connection, amount: i32) -> rusqlite::Result<()> {
+        use crate::repository::event_repo::add_fund;
+        add_fund(conn, amount)
+    }
+    fn reset_fund(&self, conn: &Connection) -> rusqlite::Result<()> {
+        use crate::repository::event_repo::reset_fund;
+        reset_fund(conn)
+    }
+}
+
+// process_turn 함수 실행 결과를 DB에 반영하는 함수 (DI 버전)
+pub fn apply_turn_result_with_repo<R: TurnExecuteRepo>(
+    repo: &R,
     conn: &Connection,
     player_id: i32,
     result: &TurnResult,
 ) -> rusqlite::Result<()> {
 
     // 위치 + lap(바퀴 수) 업데이트
-    update_position_and_lap(
+    repo.update_position_and_lap(
         conn,
         player_id,
         result.new_position,
@@ -25,9 +58,9 @@ pub fn apply_turn_result(
 
     // 월급 처리 (입금 후 내역 기록)
     if result.salary > 0 {
-        update_money(conn, player_id, result.salary)?;
+        repo.update_money(conn, player_id, result.salary)?;
 
-        record_transaction(
+        repo.record_transaction(
             conn,
             player_id,
             "deposit",
@@ -41,9 +74,9 @@ pub fn apply_turn_result(
 
         // 토지 구매
         TurnAction::Purchase { price } => {
-            update_money(conn, player_id, -*price)?;
+            repo.update_money(conn, player_id, -*price)?;
 
-            record_transaction(
+            repo.record_transaction(
                 conn,
                 player_id,
                 "withdraw",
@@ -51,7 +84,7 @@ pub fn apply_turn_result(
                 &format!("tile{}_purchase", result.new_position),
             )?;
 
-            set_owner(
+            repo.set_owner(
                 conn,
                 result.new_position,
                 player_id,
@@ -62,8 +95,8 @@ pub fn apply_turn_result(
         // 통행료 지급
         TurnAction::PayToll { owner_id, amount } => {
             // 잔액 출금
-            update_money(conn, player_id, -*amount)?;
-            record_transaction(
+            repo.update_money(conn, player_id, -*amount)?;
+            repo.record_transaction(
                 conn,
                 player_id,
                 "withdraw",
@@ -72,8 +105,8 @@ pub fn apply_turn_result(
             )?;
 
             // 토지 소유자 잔액 증가
-            update_money(conn, *owner_id, *amount)?;
-            record_transaction(
+            repo.update_money(conn, *owner_id, *amount)?;
+            repo.record_transaction(
                 conn,
                 *owner_id,
                 "deposit",
@@ -84,12 +117,10 @@ pub fn apply_turn_result(
 
         // 파산
         TurnAction::Bankrupt { owner_id, paid } => {
-            // 파산 플레이어 잔액을 먼저 차감해야 거래 전/후 잔액이 올바르게 기록된다.
-            update_money(conn, player_id, -*paid)?;
+            repo.update_money(conn, player_id, -*paid)?;
 
-            // 잔액을 전부 토지 소유자에게 지급
-            update_money(conn, *owner_id, *paid)?;
-            record_transaction(
+            repo.update_money(conn, *owner_id, *paid)?;
+            repo.record_transaction(
                 conn,
                 *owner_id,
                 "deposit",
@@ -97,8 +128,7 @@ pub fn apply_turn_result(
                 &format!("bankrupt_from_{}", player_id),
             )?;
 
-            // 출금 내역 기록
-            record_transaction(
+            repo.record_transaction(
                 conn,
                 player_id,
                 "withdraw",
@@ -106,25 +136,18 @@ pub fn apply_turn_result(
                 &format!("bankrupt_to_{}", owner_id),
             )?;
 
-            // 소유했던 토지 초기화
-            reset_owner_for_player(conn, player_id)?;
+            repo.reset_owner_for_player(conn, player_id)?;
 
-            // 파산 처리
-            bankrupt(conn, player_id)?;
+            repo.bankrupt(conn, player_id)?;
         }
 
         // 이벤트 A: 사회복지기금
         TurnAction::EventWelfareFund { amount } => {
-            use crate::repository::event_repo::add_fund;
+            repo.update_money(conn, player_id, -*amount)?;
 
-            // 돈 차감
-            update_money(conn, player_id, -*amount)?;
+            repo.add_fund(conn, *amount)?;
 
-            // 기금 증가
-            add_fund(conn, *amount)?;
-
-            // 거래 기록
-            record_transaction(
+            repo.record_transaction(
                 conn,
                 player_id,
                 "withdraw",
@@ -135,13 +158,9 @@ pub fn apply_turn_result(
 
         // 이벤트 A: 파산
         TurnAction::EventWelfareFundBankrupt { paid } => {
-            use crate::repository::event_repo::add_fund;
+            repo.add_fund(conn, *paid)?;
 
-            // 가진 돈 전부 기금으로
-            add_fund(conn, *paid)?;
-
-            // 거래 기록
-            record_transaction(
+            repo.record_transaction(
                 conn,
                 player_id,
                 "withdraw",
@@ -149,11 +168,9 @@ pub fn apply_turn_result(
                 "welfare_fund_bankrupt",
             )?;
 
-            // 토지 초기화
-            reset_owner_for_player(conn, player_id)?;
+            repo.reset_owner_for_player(conn, player_id)?;
 
-            // 파산 처리
-            bankrupt(conn, player_id)?;
+            repo.bankrupt(conn, player_id)?;
         }
 
         // 이벤트 C: 기금 없음
@@ -161,13 +178,9 @@ pub fn apply_turn_result(
 
         // 이벤트 C: 기금 수령
         TurnAction::EventFundReceive { amount } => {
-            use crate::repository::event_repo::reset_fund;
+            repo.update_money(conn, player_id, *amount)?;
 
-            // 플레이어 돈 증가
-            update_money(conn, player_id, *amount)?;
-
-            // 거래 기록
-            record_transaction(
+            repo.record_transaction(
                 conn,
                 player_id,
                 "deposit",
@@ -175,8 +188,7 @@ pub fn apply_turn_result(
                 "welfare_fund_receive",
             )?;
 
-            // 기금 초기화
-            reset_fund(conn)?;
+            repo.reset_fund(conn)?;
         }
 
         TurnAction::None => {}
@@ -185,11 +197,9 @@ pub fn apply_turn_result(
 
         // 이벤트 B: 종합부동산세
         TurnAction::EstateTax { amount } => {
-            // 플레이어 돈 차감
-            update_money(conn, player_id, -*amount)?;
+            repo.update_money(conn, player_id, -*amount)?;
 
-            // 거래 기록
-            record_transaction(
+            repo.record_transaction(
                 conn,
                 player_id,
                 "withdraw",
@@ -200,10 +210,9 @@ pub fn apply_turn_result(
 
         // 이벤트 B: 파산
         TurnAction::EstateTaxBankrupt { paid } => {
-            // 가진 돈 전부 차감
-            update_money(conn, player_id, -*paid)?;
+            repo.update_money(conn, player_id, -*paid)?;
 
-            record_transaction(
+            repo.record_transaction(
                 conn,
                 player_id,
                 "withdraw",
@@ -211,13 +220,20 @@ pub fn apply_turn_result(
                 "estate_tax_bankrupt",
             )?;
 
-            // 토지 초기화
-            reset_owner_for_player(conn, player_id)?;
+            repo.reset_owner_for_player(conn, player_id)?;
 
-            // 파산 처리
-            bankrupt(conn, player_id)?;
+            repo.bankrupt(conn, player_id)?;
         }
     }
 
     Ok(())
+}
+
+// process_turn 함수 실행 결과를 DB에 반영하는 함수
+pub fn apply_turn_result(
+    conn: &Connection,
+    player_id: i32,
+    result: &TurnResult,
+) -> rusqlite::Result<()> {
+    apply_turn_result_with_repo(&TurnExecuteRepoImpl, conn, player_id, result)
 }
