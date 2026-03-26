@@ -1,16 +1,3 @@
-/*
- * event_service.rs 단위 테스트
- * 
- * 테스트 대상: handle_event 함수
- * 테스트 전략: 각 이벤트 타입별 분기 커버리지 측정
- * 
- * 이벤트 타입:
- * 1. fund_add (사회복지기금): 돈 충분 / 부족
- * 2. tax_if_property (종합부동산세): 과세(돈충분/부족) / 스킵
- * 3. fund_take (기금 수령): 있음 / 없음
- * 4. Unknown: 알 수 없는 타입
- */
-
 use mockall::predicate::*;
 use mockall::mock;
 use project::service::event_service::{handle_event, EventRepository, EventResult};
@@ -103,9 +90,9 @@ mod tests {
         assert_eq!(result, EventResult::WelfareFund { amount: 75 });
     }
 
-    /// fund_add: get_event_info 실패
+    /// get_event_info 실패 시 이벤트 종류와 무관하게 None 반환
     #[test]
-    fn test_fund_add_get_event_info_fails() {
+    fn test_get_event_info_fails_returns_none() {
         let mut repo = MockTestRepository::new();
 
         repo.expect_get_event_info()
@@ -221,19 +208,6 @@ mod tests {
         assert_eq!(result, EventResult::EstateTax { amount: 40 });
     }
 
-    /// tax_if_property: get_event_info 실패
-    #[test]
-    fn test_tax_if_property_get_event_info_fails() {
-        let mut repo = MockTestRepository::new();
-
-        repo.expect_get_event_info()
-            .with(eq(2))
-            .returning(|_| Err(rusqlite::Error::InvalidQuery));
-
-        let result = handle_event(&repo, 1, 2);
-        assert_eq!(result, EventResult::None);
-    }
-
     /// tax_if_property: get_player_total_property_price 실패 (unwrap_or(0) 동작)
     #[test]
     fn test_tax_if_property_get_property_price_fails() {
@@ -326,19 +300,6 @@ mod tests {
 
         let result = handle_event(&repo, 1, 3);
         assert_eq!(result, EventResult::FundReceiveEmpty);
-    }
-
-    /// fund_take: get_event_info 실패
-    #[test]
-    fn test_fund_take_get_event_info_fails() {
-        let mut repo = MockTestRepository::new();
-
-        repo.expect_get_event_info()
-            .with(eq(3))
-            .returning(|_| Err(rusqlite::Error::InvalidQuery));
-
-        let result = handle_event(&repo, 1, 3);
-        assert_eq!(result, EventResult::None);
     }
 
     /// fund_take: get_fund_amount 실패
