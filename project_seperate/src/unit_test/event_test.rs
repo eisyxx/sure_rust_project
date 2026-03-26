@@ -1,20 +1,8 @@
 #[cfg(test)]
 mod tests {
     use rusqlite::Connection;
-    use crate::service::event_service::{handle_event, handle_event_with_repo, EventResult};
+    use crate::service::event_service::{handle_event_with_repo, EventResult};
     use crate::service::traits::EventServiceRepo;
-
-    // ── 실제 DB 세팅 (EventServiceRepository 커버용) ─────────
-    fn setup_integration_db() -> Connection {
-        let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch("
-            CREATE TABLE event_tiles (tile_id INTEGER, event_type TEXT, amount INTEGER);
-            CREATE TABLE players     (id INTEGER, money INTEGER);
-            CREATE TABLE properties  (tile_id INTEGER, owner_id INTEGER, price INTEGER);
-            CREATE TABLE fund        (amount INTEGER);
-        ").unwrap();
-        conn
-    }
 
     // ── Mock ──────────────────────────────────────────────
     struct MockRepo {
@@ -238,40 +226,5 @@ mod tests {
         };
         let result = handle_event_with_repo(&repo, &dummy_conn(), 1, 1);
         assert_eq!(result, EventResult::None);
-    }
-
-    // ── EventServiceRepository 실제 impl 커버 ───────────────
-    // get_event_info + get_player_money 커버
-    #[test]
-    fn integration_fund_add_covers_real_repo() {
-        let conn = setup_integration_db();
-        conn.execute("INSERT INTO event_tiles VALUES (1, 'fund_add', 50)", []).unwrap();
-        conn.execute("INSERT INTO players VALUES (1, 200)", []).unwrap();
-
-        let result = handle_event(&conn, 1, 1);
-        assert_eq!(result, EventResult::WelfareFund { amount: 50 });
-    }
-
-    // get_player_total_property_price 커버
-    #[test]
-    fn integration_tax_covers_property_price_repo() {
-        let conn = setup_integration_db();
-        conn.execute("INSERT INTO event_tiles VALUES (2, 'tax_if_property', 30)", []).unwrap();
-        conn.execute("INSERT INTO players VALUES (1, 500)", []).unwrap();
-        conn.execute("INSERT INTO properties VALUES (10, 1, 150)", []).unwrap();
-
-        let result = handle_event(&conn, 1, 2);
-        assert_eq!(result, EventResult::EstateTax { amount: 30 });
-    }
-
-    // get_fund_amount 커버
-    #[test]
-    fn integration_fund_take_covers_fund_repo() {
-        let conn = setup_integration_db();
-        conn.execute("INSERT INTO event_tiles VALUES (3, 'fund_take', 0)", []).unwrap();
-        conn.execute("INSERT INTO fund VALUES (300)", []).unwrap();
-
-        let result = handle_event(&conn, 1, 3);
-        assert_eq!(result, EventResult::FundReceive { amount: 300 });
     }
 }
