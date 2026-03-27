@@ -9,24 +9,6 @@ use crate::service::{
     traits::TurnServiceDeps,
 };
 
-#[derive(Clone)]
-// 한 턴 진행에 필요한 입력 데이터
-pub struct TurnInput {
-    pub player_id: i32,
-    pub position: i32,
-    pub lap: i32,
-    pub money: i32,
-
-    pub total_tiles: i32,
-
-    pub tile_price: i32,
-    pub tile_toll: i32,
-    pub owner: Option<i32>,
-
-    pub will_buy: bool,
-    pub tile_type: String,
-}
-
 // 한 턴 진행 결과 데이터
 pub struct TurnResult {
     pub dice: i32,

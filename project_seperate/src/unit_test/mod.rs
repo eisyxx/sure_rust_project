@@ -1,5 +1,3 @@
-pub mod common;
-
 mod buy_property_test;
 mod event_test;
 mod game_end_test;

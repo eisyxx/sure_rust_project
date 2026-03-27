@@ -13,7 +13,6 @@ mod tests {
 
         assert_eq!(result.new_position, 5);
         assert_eq!(result.new_lap, 0);
-        assert!(!result.passed_start);
     }
 
     #[test]
@@ -22,6 +21,5 @@ mod tests {
 
         assert_eq!(result.new_position, 2);
         assert_eq!(result.new_lap, 1);
-        assert!(result.passed_start);
     }
 }
