@@ -9,7 +9,7 @@ use serde::Serialize;
 mod repository;
 mod service;
 mod handler;
-use crate::service::game_end_service::{check_game_end, Player as GamePlayer};
+use crate::service::game_end_service::Player as GamePlayer;
 
 pub struct AppState {
     pub conn: Mutex<Connection>,
@@ -325,8 +325,8 @@ async fn main() -> std::io::Result<()> {
                 .service(Files::new("/assets", frontend_path("assets")))
             .service(Files::new("/", frontend_path("")).index_file("index.html"))
     })
-    .bind(format!("0.0.0.0:{}", port))?
-    // .bind("127.0.0.1:8080")?
+    // .bind(format!("0.0.0.0:{}", port))?
+    .bind("127.0.0.1:8080")?
     .run()
     .await
 }

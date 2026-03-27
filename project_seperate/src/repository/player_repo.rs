@@ -84,15 +84,6 @@ pub fn get_player_states(conn: &Connection) -> Result<Vec<PlayerState>> {
     Ok(players)
 }
 
-// 플레이어의 잔액을 지정된 값으로 업데이트 (이벤트, 월급)
-pub fn update_player_money(conn: &Connection, player_id: i32, money: i32) -> Result<()> {
-    conn.execute(
-        "UPDATE players SET money = ?1 WHERE id = ?2",
-        (money, player_id),
-    )?;
-    Ok(())
-}
-
 // 플레이어의 현재 위치(pos)와 진행한 바퀴 수(lap)를 업데이트
 pub fn update_position_and_lap(
     conn: &Connection,
