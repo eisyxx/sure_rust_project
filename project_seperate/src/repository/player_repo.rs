@@ -1,6 +1,13 @@
 use rusqlite::{Connection, Result};
 
-use crate::service::game_end_service::Player;
+#[derive(Clone)]
+pub struct PlayerRow {
+    pub id: i32,
+    pub position: i32,
+    pub money: i32,
+    pub lap: i32,
+    pub is_bankrupt: bool,
+}
 
 #[derive(Clone)]
 pub struct PlayerState {
@@ -41,13 +48,13 @@ pub fn bankrupt(conn: &Connection, player_id: i32) -> Result<()> {
 }
 
 // 현재 플레이 중인 모든 플레이어의 상태(id, 위치, 잔액, lap, 파산 여부)를 가져오기
-pub fn get_all_players(conn: &Connection) -> Result<Vec<Player>> {
+pub fn get_all_players(conn: &Connection) -> Result<Vec<PlayerRow>> {
     let mut stmt = conn.prepare(
         "SELECT id, position, money, lap, is_bankrupt FROM players ORDER BY turn_order"
     )?;
 
     let players = stmt.query_map([], |row| {
-        Ok(Player {
+        Ok(PlayerRow {
             id: row.get(0)?,
             position: row.get(1)?,
             money: row.get(2)?,

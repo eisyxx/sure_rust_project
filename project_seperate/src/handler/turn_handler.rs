@@ -2,7 +2,7 @@ use rusqlite::Connection;
 use serde::Serialize;
 
 use crate::repository::{
-    player_repo::{get_all_players, get_player_states, update_money, update_position_and_lap, PlayerState},
+    player_repo::{get_all_players, get_player_states, update_money, update_position_and_lap, PlayerState, PlayerRow},
     property_repo::{get_owned_tiles, get_owner, set_owner},
     tile_repo::get_tile_info,
     transcaction_repo::{get_transactions_by_player, record_transaction},
@@ -10,6 +10,17 @@ use crate::repository::{
 use crate::service::game_end_service::{check_game_end, Player as GamePlayer};
 use crate::service::turn_execute_service::apply_turn_result;
 use crate::service::turn_service::{build_turn_result, roll_and_move, TurnAction};
+
+// PlayerRow -> GamePlayer 변換
+fn to_game_player(row: &PlayerRow) -> GamePlayer {
+    GamePlayer {
+        id: row.id,
+        position: row.position,
+        money: row.money,
+        lap: row.lap,
+        is_bankrupt: row.is_bankrupt,
+    }
+}
 
 /// 구매 결정 대기 중인 턴 상태
 pub struct PendingTurn {
@@ -178,6 +189,7 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
     let players = get_all_players(conn)?
         .into_iter()
         .filter(|player| !player.is_bankrupt)
+        .map(|row| to_game_player(&row))
         .collect::<Vec<_>>();
 
     if players.is_empty() {
@@ -375,56 +387,21 @@ fn advance_turn(
     session: &mut SessionState,
     _player_id: i32,
 ) -> rusqlite::Result<()> {
-    let all_players = get_all_players(conn)?
-        .into_iter()
-        .map(|player| GamePlayer {
-            id: player.id,
-            position: player.position,
-            money: player.money,
-            lap: player.lap,
-            is_bankrupt: player.is_bankrupt,
-        })
-        .collect::<Vec<_>>();
+    let all_rows = get_all_players(conn)?;
+    let game_players: Vec<GamePlayer> = all_rows.iter().map(to_game_player).collect();
 
-    let game_result = check_game_end(all_players.clone());
+    let game_result = check_game_end(game_players);
     session.game_finished = game_result.is_finished;
 
     if session.game_finished {
-        // 게임 종료 시, 상금 지급
-        let mut active_players: Vec<_> = all_players
-            .iter()
-            .filter(|p| !p.is_bankrupt)
-            .cloned()
-            .collect();
-        
-        // lap 기준으로 정렬 (내림차순)
-        active_players.sort_by(|a, b| b.lap.cmp(&a.lap));
-        
-        // 상금 배분 (150 / 120 / 80)
-        let rewards = [150, 120, 80];
-        for (i, player) in active_players.iter().enumerate() {
-            if i < rewards.len() {
-                use crate::repository::player_repo::give_reward;
-                give_reward(conn, player.id, rewards[i])?;
-            }
+        // 서비스가 계산한 보상을 DB에 반영
+        for (player_id, amount) in &game_result.rewards {
+            use crate::repository::player_repo::give_reward;
+            give_reward(conn, *player_id, *amount)?;
         }
-        
-        let all_players_after_reward = get_player_states(conn)?
-            .into_iter()
-            .map(|p| (p.id, p.money))  
-            .collect::<Vec<_>>();
 
-        let mut final_rankings = all_players_after_reward.clone();
-        final_rankings.sort_by(|a, b| b.1.cmp(&a.1)); // 돈 많은 순 정렬
-
-        // 세션에 저장
-        session.winner_id = final_rankings
-            .iter()
-            .find(|(_, money)| *money != -1)
-            .map(|(id, _)| *id);
-
-        // 세션에 랭킹 추가 (프론트에서 표시 가능하도록)
-        session.final_rankings = Some(final_rankings);
+        session.winner_id = game_result.winner_id;
+        session.final_rankings = Some(game_result.rankings);
     }
     else {
         // 다음 턴

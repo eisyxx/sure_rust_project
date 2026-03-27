@@ -2,12 +2,9 @@
 mod tests {
     use rusqlite::Connection;
 
-    use::project::handler::turn_handler::{handle_turn, handle_decide, SessionState, get_state, get_transactions};
+    use::project::handler::turn_handler::{handle_turn, handle_decide, SessionState, get_transactions};
     use project::repository::{
         init::init_db::init_db,
-        player_repo::{get_player_states, update_position_and_lap, update_money},
-        property_repo::set_owner,
-        tile_repo::get_tile_info
     };
 
 

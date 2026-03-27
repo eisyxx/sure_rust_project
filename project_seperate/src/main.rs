@@ -11,6 +11,16 @@ mod service;
 mod handler;
 use crate::service::game_end_service::Player as GamePlayer;
 
+fn to_game_player(row: &repository::player_repo::PlayerRow) -> GamePlayer {
+    GamePlayer {
+        id: row.id,
+        position: row.position,
+        money: row.money,
+        lap: row.lap,
+        is_bankrupt: row.is_bankrupt,
+    }
+}
+
 pub struct AppState {
     pub conn: Mutex<Connection>,
     pub session: Mutex<handler::turn_handler::SessionState>,
@@ -39,14 +49,8 @@ async fn index(data: web::Data<AppState>) -> actix_web::Result<NamedFile> {
 
     // GamePlayer로 변환
     let game_players: Vec<GamePlayer> = db_players
-        .into_iter()
-        .map(|p| GamePlayer {
-            id: p.id,
-            position: p.position,
-            money: p.money,
-            lap: p.lap,
-            is_bankrupt: p.is_bankrupt,
-        })
+        .iter()
+        .map(to_game_player)
         .collect();
 
     //세션 초기화
