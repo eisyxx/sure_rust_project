@@ -4,5 +4,6 @@ pub mod game_end_service;
 pub mod roll_dice_service;
 pub mod movement_service;
 pub mod salary_service;
+pub mod traits;
 pub mod turn_service;
 pub mod turn_execute_service;

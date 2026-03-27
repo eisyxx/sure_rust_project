@@ -5,7 +5,7 @@ lap 동일 → 월급 없음
 
 #[cfg(test)]
 mod tests {
-    use project::service::salary_service::calculate_salary;
+    use crate::service::salary_service::calculate_salary;
 
     #[test]
     fn test_salary_given() {

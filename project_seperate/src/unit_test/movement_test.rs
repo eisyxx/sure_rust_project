@@ -5,7 +5,7 @@ lap 증가 발생
 
 #[cfg(test)]
 mod tests {
-    use project::service::movement_service::move_player;
+    use crate::service::movement_service::move_player;
 
     #[test]
     fn test_move_without_lap() {
