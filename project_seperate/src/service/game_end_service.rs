@@ -1,3 +1,6 @@
+use rusqlite::Connection;
+use crate::repository::player_repo::give_reward;
+
 #[derive(Clone, Debug)]
 pub struct Player {
     pub id: i32,
@@ -93,4 +96,12 @@ pub fn check_game_end(players: Vec<Player>) -> GameResult {
         rankings,
         rewards,
     }
+}
+
+/// 게임 종료 시 보상을 DB에 반영
+pub fn apply_rewards(conn: &Connection, rewards: &[(i32, i32)]) -> rusqlite::Result<()> {
+    for (player_id, amount) in rewards {
+        give_reward(conn, *player_id, *amount)?;
+    }
+    Ok(())
 }

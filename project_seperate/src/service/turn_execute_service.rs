@@ -237,3 +237,38 @@ pub fn apply_turn_result(
 ) -> rusqlite::Result<()> {
     apply_turn_result_with_repo(&TurnExecuteRepoImpl, conn, player_id, result)
 }
+
+/// 이동 + 월급만 선반영 (구매 결정 대기 시 사용)
+pub fn pre_apply_move_salary(
+    conn: &Connection,
+    player_id: i32,
+    new_position: i32,
+    new_lap: i32,
+    salary: i32,
+) -> rusqlite::Result<()> {
+    update_position_and_lap(conn, player_id, new_position, new_lap)?;
+    if salary > 0 {
+        update_money(conn, player_id, salary)?;
+        record_transaction(conn, player_id, "deposit", salary, "salary")?;
+    }
+    Ok(())
+}
+
+/// 구매 확정 시 DB 반영 (출금 + 거래기록 + 소유권 설정)
+pub fn apply_purchase(
+    conn: &Connection,
+    player_id: i32,
+    tile_position: i32,
+    tile_price: i32,
+) -> rusqlite::Result<()> {
+    update_money(conn, player_id, -tile_price)?;
+    record_transaction(
+        conn,
+        player_id,
+        "withdraw",
+        tile_price,
+        &format!("tile{}_purchase", tile_position),
+    )?;
+    set_owner(conn, tile_position, player_id, tile_price)?;
+    Ok(())
+}
