@@ -1,3 +1,5 @@
+#![coverage(off)]
+
 #[cfg(test)]
 mod tests {
     use rusqlite::Connection;
