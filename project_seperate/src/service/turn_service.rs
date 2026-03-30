@@ -1,11 +1,16 @@
 use rusqlite::Connection;
 
+use crate::repository::player_repo::{
+    get_all_players, get_player_states, PlayerState,
+};
+use crate::repository::{property_repo::get_owner, tile_repo::get_tile_info};
 use crate::service::{
     movement_service::move_player,
     salary_service::calculate_salary,
     buy_property_service::{decide_buy_property, BuyResult},
     roll_dice_service::roll_dice,
     event_service::{handle_event, EventResult},
+    game_end_service::Player as GamePlayer,
     traits::TurnServiceDeps,
 };
 
@@ -24,6 +29,15 @@ pub struct MoveStep {
     pub new_position: i32,
     pub new_lap: i32,
     pub salary: i32,
+}
+
+/// 이동 후 착지 타일 판정에 필요한 컨텍스트.
+pub struct LandingContext {
+    pub tile_price: i32,
+    pub tile_toll: i32,
+    pub tile_owner: Option<i32>,
+    pub tile_type: String,
+    pub money_after_salary: i32,
 }
 
 pub struct TurnServiceDepsImpl;
@@ -57,6 +71,26 @@ pub fn roll_and_move_with_deps<D: TurnServiceDeps>(
 /// 주사위 굴리기 + 이동 + 월급 계산 수행 (구매 결정 제외)
 pub fn roll_and_move(position: i32, lap: i32, total_tiles: i32) -> MoveStep {
     roll_and_move_with_deps(&TurnServiceDepsImpl, position, lap, total_tiles)
+}
+
+/// 도착 타일 정보와 소유자 조회 + 월급 반영 후 잔액 계산을 한 번에 수행한다.
+pub fn build_landing_context(
+    conn: &Connection,
+    new_position: i32,
+    current_money: i32,
+    salary: i32,
+) -> LandingContext {
+    let (tile_price, tile_toll, _, tile_type) =
+        get_tile_info(conn, new_position).unwrap_or((0, 0, None, String::from("unknown")));
+    let tile_owner = get_owner(conn, new_position).unwrap_or(None);
+
+    LandingContext {
+        tile_price,
+        tile_toll,
+        tile_owner,
+        tile_type,
+        money_after_salary: current_money + salary,
+    }
 }
 
 pub fn build_turn_result_with_deps<D: TurnServiceDeps>(
@@ -125,6 +159,43 @@ pub fn build_turn_result(
         &TurnServiceDepsImpl, conn, move_step, player_id,
         money_after_salary, tile_price, tile_toll, tile_owner, will_buy, tile_type,
     )
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  플레이어·턴 조회 서비스
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/// DB에서 파산하지 않은 활성 플레이어를 `GamePlayer` 형태로 반환한다.
+pub fn get_active_game_players(conn: &Connection) -> rusqlite::Result<Vec<GamePlayer>> {
+    let rows = get_all_players(conn)?;
+    Ok(rows
+        .into_iter()
+        .filter(|r| !r.is_bankrupt)
+        .map(|r| GamePlayer {
+            id: r.id,
+            position: r.position,
+            money: r.money,
+            lap: r.lap,
+            is_bankrupt: r.is_bankrupt,
+        })
+        .collect())
+}
+
+/// 현재 턴 인덱스를 기반으로 실제 턴을 진행할 플레이어의 ID를 반환한다.
+///
+/// DB에서 플레이어 상태를 조회한 뒤, 활성(비파산) 플레이어 수로
+/// 인덱스를 정규화하여 해당 플레이어 ID를 계산한다.
+/// 활성 플레이어가 없으면 `None`을 반환한다.
+pub fn resolve_current_player_id(conn: &Connection, current_turn_index: usize) -> rusqlite::Result<Option<i32>> {
+    let players = get_player_states(conn)?;
+    let active: Vec<&PlayerState> = players.iter().filter(|p| !p.is_bankrupt).collect();
+
+    if active.is_empty() {
+        return Ok(None);
+    }
+
+    let normalized = current_turn_index % active.len();
+    Ok(Some(active[normalized].id))
 }
 
 // 턴 동안 발생한 행동 종류

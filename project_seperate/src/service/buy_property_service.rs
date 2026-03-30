@@ -1,3 +1,8 @@
+/// 구매 제안이 필요한 타일인지 판단 (소유자 없음 + 이벤트/시작 타일 아님 + 가격 > 0)
+pub fn is_purchasable_tile(tile_owner: Option<i32>, tile_type: &str, tile_price: i32) -> bool {
+    tile_owner.is_none() && tile_type != "event" && tile_type != "start" && tile_price > 0
+}
+
 /// 타일 도착 시 부동산 관련 행동을 결정하는 함수
 /// 소유자 여부에 따라 통행료 지불 or 구매or 파산 등을 판단
 pub fn decide_buy_property(
