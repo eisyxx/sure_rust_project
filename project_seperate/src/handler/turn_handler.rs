@@ -14,32 +14,19 @@ use serde::Serialize;
 
 // ── Repository 의존성 ──
 use crate::repository::{
-    player_repo::{get_all_players, get_player_states, PlayerState, PlayerRow},
-    property_repo::{get_owned_tiles, get_owner},
-    tile_repo::get_tile_info,
+    player_repo::{get_player_states, PlayerState},
+    property_repo::get_owned_tiles,
     transcaction_repo::get_transactions_by_player,
 };
 
 // ── Service 의존성 ──
 use crate::service::buy_property_service::{is_purchasable_tile, decide_buy_property, BuyResult};
-use crate::service::game_end_service::{check_game_end, apply_rewards, Player as GamePlayer};
+use crate::service::game_end_service::{evaluate_and_apply_game_end, Player as GamePlayer};
 use crate::service::turn_execute_service::{apply_turn_result, pre_apply_move_salary, apply_purchase};
-use crate::service::turn_service::{build_turn_result, roll_and_move, TurnAction};
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  내부 변환 헬퍼 함수
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-/// DB 조회용 `PlayerRow`를 게임 로직용 `GamePlayer`로 변환한다.
-fn to_game_player(row: &PlayerRow) -> GamePlayer {
-    GamePlayer {
-        id: row.id,
-        position: row.position,
-        money: row.money,
-        lap: row.lap,
-        is_bankrupt: row.is_bankrupt,
-    }
-}
+use crate::service::turn_service::{
+    build_landing_context, build_turn_result, roll_and_move, get_active_game_players,
+    resolve_current_player_id, TurnAction,
+};
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  세션 및 대기 상태 구조체
@@ -147,27 +134,8 @@ pub struct ApiTurnResponse {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  내부 유틸리티 함수
+//  내부 유틸리티 함수 (응답 조립용)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-/// 파산하지 않은 활성 플레이어만 필터링하여 반환한다.
-fn active_players(players: &[PlayerState]) -> Vec<&PlayerState> {
-    players.iter().filter(|player| !player.is_bankrupt).collect()
-}
-
-/// 현재 턴 인덱스를 활성 플레이어 수로 나눈 나머지로
-/// 실제 턴을 진행할 플레이어의 ID를 반환한다.
-/// 활성 플레이어가 없으면 `None`을 반환한다.
-fn current_player_id(players: &[PlayerState], current_turn_index: usize) -> Option<i32> {
-    let active = active_players(players);
-
-    if active.is_empty() {
-        return None;
-    }
-
-    let normalized_index = current_turn_index % active.len();
-    Some(active[normalized_index].id)
-}
 
 /// 내부 `PlayerState` 목록을 API 응답용 `ApiPlayer` 목록으로 변환한다.
 fn map_players(players: Vec<PlayerState>) -> Vec<ApiPlayer> {
@@ -207,7 +175,7 @@ fn map_tile_owners(conn: &Connection) -> rusqlite::Result<Vec<ApiTileOwner>> {
 /// 플레이어 목록, 타일 소유 현황, 현재 턴 플레이어, 게임 종료 여부를 포함한다.
 pub fn get_state(conn: &Connection, session: &SessionState) -> rusqlite::Result<ApiStateResponse> {
     let players = get_player_states(conn)?;
-    let current_player_id = current_player_id(&players, session.current_turn_index);
+    let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
     let tile_owners = map_tile_owners(conn)?;
 
     Ok(ApiStateResponse {
@@ -247,16 +215,12 @@ pub fn get_transactions(conn: &Connection, player_id: i32) -> rusqlite::Result<V
 ///    - **그 외 타일**: 통행료 지불, 이벤트 처리 등을 즉시 실행
 /// 4. 턴 종료 후 게임 종료 여부를 판단한다.
 pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::Result<ApiTurnResponse> {
-    // 파산하지 않은 활성 플레이어만 조회
-    let players = get_all_players(conn)?
-        .into_iter()
-        .filter(|player| !player.is_bankrupt)
-        .map(|row| to_game_player(&row))
-        .collect::<Vec<_>>();
+    // 서비스에서 활성(비파산) 플레이어 목록 조회
+    let players = get_active_game_players(conn)?;
 
-    // 활성 플레이어가 없으면 게임 즉시 종료
+    // 활성 플레이어가 없으면 서비스의 종료 판정 로직으로 상태를 확정
     if players.is_empty() {
-        session.game_finished = true;
+        advance_turn(conn, session, 0)?;
 
         return Ok(ApiTurnResponse {
             player_id: 0,
@@ -272,8 +236,8 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
             players: vec![],
             tile_owners: vec![],
             current_player_id: None,
-            game_finished: true,
-            winner_id: None,
+            game_finished: session.game_finished,
+            winner_id: session.winner_id,
         });
     }
 
@@ -287,11 +251,18 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
     // 주사위 굴리기 → 새 위치·랩·월급 계산 (보드 크기: 24칸)
     let move_step = roll_and_move(current_player.position, current_player.lap, 24);
 
-    // 도착 타일의 정보(가격, 통행료, 타입)와 소유자 조회
-    let (tile_price, tile_toll, _, tile_type) =
-        get_tile_info(conn, move_step.new_position).unwrap_or((0, 0, None, String::from("unknown")));
-    let tile_owner = get_owner(conn, move_step.new_position).unwrap_or(None);
-    let money_after_salary = current_player.money + move_step.salary;
+    // 도착 타일 정보 조회 + 월급 반영 후 잔액 계산(서비스)
+    let landing = build_landing_context(
+        conn,
+        move_step.new_position,
+        current_player.money,
+        move_step.salary,
+    );
+    let tile_price = landing.tile_price;
+    let tile_toll = landing.tile_toll;
+    let tile_owner = landing.tile_owner;
+    let tile_type = landing.tile_type;
+    let money_after_salary = landing.money_after_salary;
 
     // ── 분기 1: 구매 가능 타일 (소유자 없음) → 구매 여부를 클라이언트에 질의 ──
     if is_purchasable_tile(tile_owner, &tile_type, tile_price) {
@@ -313,7 +284,7 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
 
         let players_after = get_player_states(conn)?;
         let tile_owners = map_tile_owners(conn)?;
-        let cpi = current_player_id(&players_after, session.current_turn_index);
+        let cpi = resolve_current_player_id(conn, session.current_turn_index)?;
 
         return Ok(ApiTurnResponse {
             player_id: current_player.id,
@@ -359,7 +330,7 @@ pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::R
     // 갱신된 상태를 DB에서 다시 조회
     let players_after = get_player_states(conn)?;
     let tile_owners = map_tile_owners(conn)?;
-    let current_player_id = current_player_id(&players_after, session.current_turn_index);
+    let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
 
     // TurnAction 열거형을 API 응답용 문자열·숫자로 매핑
     let (action_type, action_amount, owner_id) = match &turn_result.action {
@@ -435,7 +406,7 @@ pub fn handle_decide(
 
     let players_after = get_player_states(conn)?;
     let tile_owners = map_tile_owners(conn)?;
-    let current_player_id = current_player_id(&players_after, session.current_turn_index);
+    let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
 
     Ok(ApiTurnResponse {
         player_id: pending.player_id,
@@ -461,29 +432,20 @@ pub fn handle_decide(
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 /// 다음 턴으로 진행하고 게임 종료 조건을 판단한다.
-///
-/// - 게임 종료 조건 충족 시: 보상을 DB에 반영하고 `session`에 결과를 기록한다.
-/// - 아직 진행 중이면: 턴 인덱스를 1 증가시킨다.
+/// 서비스(`evaluate_and_apply_game_end`)를 호출하여 게임 종료 여부를 판단하고,
+/// 그 결과를 세션 상태에 반영하는 역할만 담당한다.
 fn advance_turn(
     conn: &Connection,
     session: &mut SessionState,
     _player_id: i32,
 ) -> rusqlite::Result<()> {
-    let all_rows = get_all_players(conn)?;
-    let game_players: Vec<GamePlayer> = all_rows.iter().map(to_game_player).collect();
+    let result = evaluate_and_apply_game_end(conn)?;
+    session.game_finished = result.game_finished;
 
-    // 게임 종료 조건 확인 (전원 파산, 랩 초과 등)
-    let game_result = check_game_end(game_players);
-    session.game_finished = game_result.is_finished;
-
-    if session.game_finished {
-        // 게임 종료: 순위별 보상금을 DB에 반영
-        apply_rewards(conn, &game_result.rewards)?;
-
-        session.winner_id = game_result.winner_id;
-        session.final_rankings = Some(game_result.rankings);
+    if result.game_finished {
+        session.winner_id = result.winner_id;
+        session.final_rankings = result.rankings;
     } else {
-        // 게임 진행 중: 다음 플레이어에게 턴 넘김
         session.current_turn_index += 1;
         session.winner_id = None;
         session.final_rankings = None;
