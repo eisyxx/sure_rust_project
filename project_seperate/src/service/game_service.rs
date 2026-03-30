@@ -132,9 +132,9 @@ fn advance_turn(
 
 /// 세션 초기화 (index 페이지 진입 시)
 pub fn init_session(conn: &Connection) -> rusqlite::Result<SessionState> {
-    init_db::init_db(conn)?;
+    init_db::init_db(conn)?; // [DB 초기화] repository 직접 호출
 
-    let db_players = get_all_players(conn)?;
+    let db_players = get_all_players(conn)?; // [DB 읽기] repository 직접 호출
     let game_players: Vec<GamePlayer> = db_players.iter().map(to_game_player).collect();
 
     Ok(SessionState {
@@ -149,9 +149,9 @@ pub fn init_session(conn: &Connection) -> rusqlite::Result<SessionState> {
 
 /// 현재 게임 상태 조회
 pub fn get_state(conn: &Connection, session: &SessionState) -> rusqlite::Result<StateResult> {
-    let players = get_player_states(conn)?;
+    let players = get_player_states(conn)?; // [DB 읽기] repository 직접 호출
     let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
-    let tile_owners = get_owned_tiles(conn)?;
+    let tile_owners = get_owned_tiles(conn)?; // [DB 읽기] repository 직접 호출
 
     Ok(StateResult {
         players,
@@ -164,7 +164,7 @@ pub fn get_state(conn: &Connection, session: &SessionState) -> rusqlite::Result<
 
 /// 특정 플레이어의 거래 내역 조회
 pub fn get_transactions(conn: &Connection, player_id: i32) -> rusqlite::Result<Vec<TransactionRecord>> {
-    get_transactions_by_player(conn, player_id)
+    get_transactions_by_player(conn, player_id) // [DB 읽기] repository 직접 호출
 }
 
 /// 한 턴 진행
@@ -229,8 +229,8 @@ pub fn process_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::
             money_after_salary,
         });
 
-        let players_after = get_player_states(conn)?;
-        let tile_owners = get_owned_tiles(conn)?;
+        let players_after = get_player_states(conn)?; // [DB 읽기] repository 직접 호출
+        let tile_owners = get_owned_tiles(conn)?; // [DB 읽기] repository 직접 호출
         let cpi = resolve_current_player_id(conn, session.current_turn_index)?;
 
         return Ok(TurnOutcome {
@@ -272,8 +272,8 @@ pub fn process_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::
 
     advance_turn(conn, session)?;
 
-    let players_after = get_player_states(conn)?;
-    let tile_owners = get_owned_tiles(conn)?;
+    let players_after = get_player_states(conn)?; // [DB 읽기] repository 직접 호출
+    let tile_owners = get_owned_tiles(conn)?; // [DB 읽기] repository 직접 호출
     let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
 
     let (action_type, action_amount, owner_id) = map_action(&turn_result.action);
@@ -328,8 +328,8 @@ pub fn process_decide(
 
     advance_turn(conn, session)?;
 
-    let players_after = get_player_states(conn)?;
-    let tile_owners = get_owned_tiles(conn)?;
+    let players_after = get_player_states(conn)?; // [DB 읽기] repository 직접 호출
+    let tile_owners = get_owned_tiles(conn)?; // [DB 읽기] repository 직접 호출
     let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
 
     Ok(TurnOutcome {
@@ -353,7 +353,7 @@ pub fn process_decide(
 
 /// 게임 결과 조회
 pub fn get_result(conn: &Connection, session: &SessionState) -> Vec<ResultPlayer> {
-    let all_players = match get_all_players(conn) {
+    let all_players = match get_all_players(conn) { // [DB 읽기] repository 직접 호출
         Ok(players) => players,
         Err(_) => return vec![],
     };
@@ -389,7 +389,7 @@ pub fn get_result(conn: &Connection, session: &SessionState) -> Vec<ResultPlayer
 
 /// 게임 리셋
 pub fn reset_game(conn: &Connection, session: &mut SessionState) -> rusqlite::Result<()> {
-    init_db::init_db(conn)?;
+    init_db::init_db(conn)?; // [DB 초기화] repository 직접 호출
 
     session.current_turn_index = 0;
     session.game_finished = false;
