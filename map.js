@@ -90,6 +90,7 @@ function bindEvents() {
       const response = await fetch("/api/turn", {
         method: "POST",
       });
+      console.log("🔥 response:", response); //디버깅용
 
       if (!response.ok) {
         const message = await response.text();
@@ -97,11 +98,13 @@ function bindEvents() {
       }
 
       const result = await response.json();
+      console.log("🎲 turn result:", result); //디버깅용
       diceEl.textContent = String(result.dice);
 
       await animateTurn(result.player_id, result.dice);
 
       showSalaryMessage(result);
+      showTurnMessage(result);
       
       if (result.game_finished) {
         gameFinished = true;
@@ -112,16 +115,16 @@ function bindEvents() {
         return;
       }
 
-      if (result.action_type === "can_buy") {
-        applyState(result);
-        waitingForDecision = true;
-        showBuyDecision(result.action_amount);
+      if (result.type === "NeedDecision") {
+          waitingForDecision = true;
+          pendingTurnResult = result;
+
+          showBuyDecision(result.price);
+          buyBtn.disabled = false;
+          confirmBtn.disabled = false;
       } else {
-        waitingForDecision = true;
-        pendingTurnResult = result;
-        confirmBtn.disabled = false;
-        showTurnMessage(result);
-        updateCurrentPlayerBalanceFromTurnResult(result);
+          pendingTurnResult = result;
+          confirmBtn.disabled = false;
       }
     } catch (error) {
       alert(error.message || "턴 실행 중 오류가 발생했습니다.");
@@ -149,6 +152,12 @@ function bindEvents() {
       }
 
       pendingDecideResult = await response.json();
+      console.log("💰 decide result:", pendingDecideResult); //디버깅용
+
+      pendingDecideResult = decideResult;
+      if (pendingTurnResult?.type === "NeedDecision") {
+        pendingTurnResult.type = "Normal"; // 더 이상 결정 필요 없음
+      }
 
       const updatedCurrentPlayer = pendingDecideResult.players?.find(
         (player) => player.id === currentPlayerId,
@@ -169,6 +178,8 @@ function bindEvents() {
         alert("잔액이 부족합니다");
       }
 
+      showTurnMessage(pendingDecideResult);
+
       buyBtn.disabled = true;
       confirmBtn.disabled = false;
     } catch (error) {
@@ -179,40 +190,43 @@ function bindEvents() {
 
   // 확인 버튼
   confirmBtn.onclick = async () => {  
-    if (pendingTurnResult?.game_finished) {
-      window.location.href = `/result`;
-    }
-    if (pendingDecideResult !== null) {
-      // 구매 후 확인 → 턴 마무리만 (알림은 구매 시 이미 표시됨)
-      applyState(pendingDecideResult);
-      pendingDecideResult = null;
-      buyBtn.disabled = true;
-      confirmBtn.disabled = true;
-      diceEl.textContent = "-";
+    try {
+        // NeedDecision 상태면 decide 먼저
+        if (pendingTurnResult?.type === "NeedDecision" && pendingDecideResult === null) {
+          await sendDecide(false);
+          return;
+        }
+        // 그 외 end_turn
+         const response = await fetch("/api/end_turn", { method: "POST" });
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || "턴 종료 실패");
+        }
 
-      if (!gameFinished) {
-        rollBtn.disabled = false;
-      }
-    } else if (pendingTurnResult !== null) {
-      // 이벤트/통행료 등 확인 후 턴 마무리
-      applyState(pendingTurnResult);
-      pendingTurnResult = null;
-      buyBtn.disabled = true;
-      confirmBtn.disabled = true;
-      diceEl.textContent = "-";
+        const result = await response.json();
+        pendingDecideResult = null;
+        pendingTurnResult = null;
 
-      if (!gameFinished) {
-        rollBtn.disabled = false;
+        buyBtn.disabled = true;
+        confirmBtn.disabled = true;
+        diceEl.textContent = "-";
+
+        applyState(result);
+
+        if (!gameFinished) {
+            rollBtn.disabled = false;
+        }
+
+      } 
+        catch (error) {
+        alert(error.message || "오류가 발생했습니다.");
       }
-    } else {
-      // 구매 안 함 → 서버에 skip 전달
-      await sendDecide(false);
-    }
-  };
+    };
 
   //거래 내역 열기
   accountBtn.onclick = async () => {
     if (!currentPlayerId) {
+      alert("현재 플레이어를 찾을 수 없습니다.");
       return;
     }
 
@@ -250,9 +264,11 @@ async function sendDecide(willBuy) {
     }
 
     const result = await response.json();
-    applyState(result);
+    pendingTurnResult = result;
     showTurnMessage(result);
     diceEl.textContent = "-";
+    applyState(result);
+
   } catch (error) {
     alert(error.message || "오류가 발생했습니다.");
   } finally {
@@ -283,8 +299,9 @@ async function initGame() {
 // 서버 상태를 클라이언트에 적용
 function applyState(state) {
   syncPlayers(state.players);
-  currentPlayerId = state.current_player_id;
-  gameFinished = state.game_finished;
+  currentPlayerId =
+    state.players[state.session.current_turn_index]?.id;
+  gameFinished = state.session.game_finished;
 
   renderTileOwners(state.tile_owners || []);
   renderPlayers();
@@ -509,7 +526,7 @@ async function loadTransactions(playerId) {
 
 // 턴 메세지 표시 (월급)
 function showSalaryMessage(result) {
-  if (result.salary > 0) {
+  if (result.salary && result.salary > 0) {
     alert(`월급 ${formatMoney(result.salary)} 지급`);
   }
 }

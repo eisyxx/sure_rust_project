@@ -1,5 +1,12 @@
 /// 타일 도착 시 부동산 관련 행동을 결정하는 함수
 /// 소유자 여부에 따라 통행료 지불 or 구매or 파산 등을 판단
+pub enum BuyResult {
+    PayToll { owner_id: i32, amount: i32 },
+    Bankrupt { owner_id: i32, paid: i32 },
+    CanBuy { price: i32 },
+    Skip,
+}
+
 pub fn decide_buy_property(
     player_id: i32,
     money: i32,
@@ -58,13 +65,4 @@ pub fn decide_buy_property(
             }
         }
     }
-}
-
-/// 부동산 처리 결과
-pub enum BuyResult {
-    PayToll { owner_id: i32, amount: i32 },
-    Purchase { price: i32 },
-    Bankrupt { owner_id: i32, paid: i32 },
-    NotEnoughMoney,
-    Skip,
 }

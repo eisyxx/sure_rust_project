@@ -10,10 +10,12 @@ mod repository;
 mod service;
 mod handler;
 use crate::service::game_end_service::Player as GamePlayer;
+use crate::handler::turn_handler_all;
+use crate::service::turn_service_all::{SessionState, TurnState};
 
 pub struct AppState {
-    pub conn: Mutex<Connection>,
-    pub session: Mutex<handler::turn_handler::SessionState>,
+    db_path: String,
+    session: Mutex<SessionState>,
 }
 
 fn frontend_path(path: &str) -> PathBuf {
@@ -25,10 +27,7 @@ fn frontend_path(path: &str) -> PathBuf {
 // 메인 페이지
 #[get("/")]
 async fn index(data: web::Data<AppState>) -> actix_web::Result<NamedFile> {
-    let conn = match data.conn.lock() {
-        Ok(conn) => conn,
-        Err(_) => return Err(actix_web::error::ErrorInternalServerError("DB 잠금 실패")),
-    };
+    let conn = Connection::open(&data.db_path).unwrap();
 
     repository::init::init_db::init_db(&conn)
         .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
@@ -55,15 +54,6 @@ async fn index(data: web::Data<AppState>) -> actix_web::Result<NamedFile> {
         Err(_) => return Err(actix_web::error::ErrorInternalServerError("세션 잠금 실패")),
     };
 
-    *session = handler::turn_handler::SessionState {
-        current_turn_index: 0,
-        game_finished: false,
-        winner_id: None,
-        pending: None,
-        final_rankings: None,
-        players: game_players,
-    };
-
     Ok(NamedFile::open(frontend_path("index.html"))?)
 }
 
@@ -86,12 +76,9 @@ async fn game_state(data: web::Data<AppState>) -> HttpResponse {
         Ok(session) => session,
         Err(_) => return HttpResponse::InternalServerError().body("세션 잠금 실패"),
     };
-    let conn = match data.conn.lock() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
-    };
+    let conn = Connection::open(&data.db_path).unwrap();
 
-    match handler::turn_handler::get_state(&conn, &session) {
+    match handler::turn_handler_all::get_state(&conn, &*session) {
         Ok(state) => HttpResponse::Ok().json(state),
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
     }
@@ -100,69 +87,57 @@ async fn game_state(data: web::Data<AppState>) -> HttpResponse {
 // 턴 진행 API
 #[post("/api/turn")]
 async fn turn_api(data: web::Data<AppState>) -> HttpResponse {
-    let mut session = match data.session.lock() {
-        Ok(session) => session,
-        Err(_) => return HttpResponse::InternalServerError().body("세션 잠금 실패"),
-    };
+    let conn = Connection::open(&data.db_path).unwrap();
+    let mut session = data.session.lock().unwrap();
 
-    if session.game_finished {
-        return HttpResponse::Conflict().body("게임이 이미 종료되었습니다.");
-    }
-
-    if session.pending.is_some() {
-        return HttpResponse::Conflict().body("이전 턴의 구매 결정을 먼저 완료해주세요.");
-    }
-
-    let conn = match data.conn.lock() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
-    };
-
-    match handler::turn_handler::handle_turn(&conn, &mut session) {
-        Ok(turn_result) => HttpResponse::Ok().json(turn_result),
-        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    match turn_handler_all::handle_turn_api(&conn, &mut session) {
+        Ok(result) => HttpResponse::Ok().json(result),
+        Err(err) => HttpResponse::InternalServerError().body(err),
     }
 }
 
 // 구매 결정 API
 #[derive(serde::Deserialize)]
-struct DecideBody {
+struct DecideRequest {
     will_buy: bool,
 }
 
 #[post("/api/decide")]
-async fn decide_api(body: web::Json<DecideBody>, data: web::Data<AppState>) -> HttpResponse {
-    let mut session = match data.session.lock() {
-        Ok(session) => session,
-        Err(_) => return HttpResponse::InternalServerError().body("세션 잠금 실패"),
-    };
+async fn decide_api(data: web::Data<AppState>, body: web::Json<DecideRequest>,) -> HttpResponse {
 
-    if session.pending.is_none() {
-        return HttpResponse::BadRequest().body("대기 중인 구매 결정이 없습니다.");
-    }
+    let conn = Connection::open(&data.db_path).unwrap();
+    let mut session = data.session.lock().unwrap();
 
-    let conn = match data.conn.lock() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
-    };
-
-    match handler::turn_handler::handle_decide(&conn, &mut session, body.will_buy) {
+    match turn_handler_all::handle_decide_api(
+        &conn,
+        &mut session,
+        body.will_buy,
+    ) {
         Ok(result) => HttpResponse::Ok().json(result),
-        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+        Err(err) => HttpResponse::InternalServerError().body(err),
     }
 }
 
 // 특정 플레이어 거래 내역 조회 API
 #[get("/api/transactions/{player_id}")]
 async fn player_transactions(path: web::Path<i32>, data: web::Data<AppState>) -> HttpResponse {
-    let conn = match data.conn.lock() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
-    };
+    let conn = Connection::open(&data.db_path).unwrap();
 
-    match handler::turn_handler::get_transactions(&conn, path.into_inner()) {
+    match repository::transcaction_repo::get_transactions_by_player(&conn, path.into_inner()) {
         Ok(transactions) => HttpResponse::Ok().json(transactions),
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
+}
+
+// 턴 끝내는 API
+#[post("/api/end_turn")]
+async fn end_turn_api(data: web::Data<AppState>) -> HttpResponse {
+    let conn = Connection::open(&data.db_path).unwrap();
+    let mut session = data.session.lock().unwrap();
+
+    match turn_handler_all::handle_end_turn_api(&conn, &mut session) {
+        Ok(result) => HttpResponse::Ok().json(result),
+        Err(err) => HttpResponse::InternalServerError().body(err),
     }
 }
 
@@ -247,11 +222,7 @@ async fn game_result(data: web::Data<AppState>) -> HttpResponse {
         Ok(s) => s,
         Err(_) => return HttpResponse::InternalServerError().body("세션 잠금 실패"),
     };
-    let conn = match data.conn.lock() {
-            Ok(c) => c,
-            Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
-        };
-
+    let conn = Connection::open(&data.db_path).unwrap();
     let frontend_players = get_frontend_players(&conn, &session.final_rankings);
 
     HttpResponse::Ok().json(frontend_players)
@@ -265,10 +236,7 @@ async fn reset_game(data: web::Data<AppState>) -> HttpResponse {
         Err(_) => return HttpResponse::InternalServerError().body("세션 잠금 실패"),
     };
 
-    let conn = match data.conn.lock() {
-        Ok(c) => c,
-        Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
-    };
+    let conn = Connection::open(&data.db_path).unwrap();
 
     // DB 초기화
     if let Err(e) = repository::init::init_db::init_db(&conn) {
@@ -278,9 +246,6 @@ async fn reset_game(data: web::Data<AppState>) -> HttpResponse {
     // 세션 초기화
     session.current_turn_index = 0;
     session.game_finished = false;
-    session.winner_id = None;
-    session.pending = None;
-    session.final_rankings = None;
 
     HttpResponse::Ok().body("reset success")
 }
@@ -295,14 +260,13 @@ async fn main() -> std::io::Result<()> {
     println!("게임 서버 실행!");
 
     let app_state = web::Data::new(AppState {
-        conn: Mutex::new(conn),
-        session: Mutex::new(handler::turn_handler::SessionState {
+        db_path: "game.db".to_string(),
+        session: Mutex::new(SessionState {
             current_turn_index: 0,
+            turn_state: TurnState::Start,
             game_finished: false,
             winner_id: None,
-            pending: None,
             final_rankings: None,
-            players: vec![],
         }),
     });
 
@@ -320,6 +284,7 @@ async fn main() -> std::io::Result<()> {
             .service(reset_game)
             .service(turn_api)
             .service(decide_api)
+            .service(end_turn_api)
             .service(player_transactions)
             .service(game_result) 
                 .service(Files::new("/assets", frontend_path("assets")))

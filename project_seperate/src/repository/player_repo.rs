@@ -1,8 +1,9 @@
 use rusqlite::{Connection, Result};
+use serde::Serialize;
 
 use crate::service::game_end_service::Player;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize)]
 pub struct PlayerState {
     pub id: i32,
     pub name: String,
@@ -19,6 +20,23 @@ pub fn get_player_money(conn: &Connection, player_id: i32) -> Result<i32> {
         "SELECT money FROM players WHERE id = ?1",
         [player_id],
         |row| row.get(0),
+    )
+}
+
+// 지정 플레이어의 정보 불러오기
+pub fn get_player(conn: &Connection, player_id: i32) -> Result<Player> {
+    conn.query_row(
+        "SELECT id, position, money, lap, is_bankrupt FROM players WHERE id = ?1",
+        [player_id],
+        |row| {
+            Ok(Player {
+                id: row.get(0)?,
+                position: row.get(1)?,
+                money: row.get(2)?,
+                lap: row.get(3)?,
+                is_bankrupt: row.get::<_, i32>(4)? == 1,
+            })
+        },
     )
 }
 

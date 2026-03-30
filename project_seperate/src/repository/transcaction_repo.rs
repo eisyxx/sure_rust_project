@@ -1,7 +1,8 @@
 use rusqlite::{Connection, Result};
+use serde::Serialize;
 
 // 플레이어의 거래 내역을 나타내는 구조체
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct TransactionRecord {
     pub id: i32,
     pub tx_type: String,
