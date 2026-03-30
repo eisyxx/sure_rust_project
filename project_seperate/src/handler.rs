@@ -7,13 +7,13 @@ use actix_web::{get, post, web, HttpResponse};
 use serde::Serialize;
 
 use crate::AppState;
-use crate::service::game_service;
+use crate::service::orchestrator;
 use crate::repository::player_repo::PlayerState;
 use crate::repository::property_repo::TileOwnerRecord;
 use crate::repository::transcaction_repo::TransactionRecord;
 
 // 타입 재공개 (main.rs의 AppState, 테스트 등에서 사용)
-pub use game_service::{SessionState, PendingTurn};
+pub use orchestrator::{SessionState, PendingTurn};
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  요청/응답 DTO
@@ -133,7 +133,7 @@ fn map_transactions(txs: Vec<TransactionRecord>) -> Vec<ApiTransaction> {
         .collect()
 }
 
-fn map_result_players(players: Vec<game_service::ResultPlayer>) -> Vec<PlayerFrontend> {
+fn map_result_players(players: Vec<orchestrator::ResultPlayer>) -> Vec<PlayerFrontend> {
     players
         .into_iter()
         .map(|p| PlayerFrontend {
@@ -147,7 +147,7 @@ fn map_result_players(players: Vec<game_service::ResultPlayer>) -> Vec<PlayerFro
         .collect()
 }
 
-fn map_turn_outcome(o: game_service::TurnOutcome) -> ApiTurnResponse {
+fn map_turn_outcome(o: orchestrator::TurnOutcome) -> ApiTurnResponse {
     ApiTurnResponse {
         player_id: o.player_id,
         dice: o.dice,
@@ -182,7 +182,7 @@ pub async fn get_state(data: web::Data<AppState>) -> HttpResponse {
         Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
     };
 
-    match game_service::get_state(&conn, &session) {
+    match orchestrator::get_state(&conn, &session) {
         Ok(state) => HttpResponse::Ok().json(ApiStateResponse {
             players: map_players(state.players),
             tile_owners: map_tile_owners(state.tile_owners),
@@ -214,7 +214,7 @@ pub async fn post_turn(data: web::Data<AppState>) -> HttpResponse {
         Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
     };
 
-    match game_service::process_turn(&conn, &mut session) {
+    match orchestrator::process_turn(&conn, &mut session) {
         Ok(outcome) => HttpResponse::Ok().json(map_turn_outcome(outcome)),
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
     }
@@ -239,7 +239,7 @@ pub async fn post_decide(
         Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
     };
 
-    match game_service::process_decide(&conn, &mut session, body.will_buy) {
+    match orchestrator::process_decide(&conn, &mut session, body.will_buy) {
         Ok(outcome) => HttpResponse::Ok().json(map_turn_outcome(outcome)),
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
     }
@@ -255,7 +255,7 @@ pub async fn get_transaction(
         Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
     };
 
-    match game_service::get_transactions(&conn, path.into_inner()) {
+    match orchestrator::get_transactions(&conn, path.into_inner()) {
         Ok(txs) => HttpResponse::Ok().json(map_transactions(txs)),
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
     }
@@ -272,7 +272,7 @@ pub async fn get_result(data: web::Data<AppState>) -> HttpResponse {
         Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
     };
 
-    let result = game_service::get_result(&conn, &session);
+    let result = orchestrator::get_result(&conn, &session);
     HttpResponse::Ok().json(map_result_players(result))
 }
 
@@ -287,7 +287,7 @@ pub async fn post_reset(data: web::Data<AppState>) -> HttpResponse {
         Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
     };
 
-    match game_service::reset_game(&conn, &mut session) {
+    match orchestrator::reset_game(&conn, &mut session) {
         Ok(_) => HttpResponse::Ok().body("reset success"),
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
     }

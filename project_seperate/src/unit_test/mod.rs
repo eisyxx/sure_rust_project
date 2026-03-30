@@ -1,4 +1,5 @@
 mod buy_property_test;
+mod common_db;
 mod event_test;
 mod game_end_test;
 mod movement_test;

@@ -2,9 +2,9 @@
 mod tests {
     use rusqlite::Connection;
 
-    use project::service::game_service::{process_turn, process_decide, get_transactions, SessionState};
-    use project::service::turn_service::resolve_current_player_id;
-    use project::repository::{
+    use crate::service::orchestrator::{process_turn, process_decide, get_transactions, SessionState};
+    use crate::service::turn_service::resolve_current_player_id;
+    use crate::repository::{
         init::init_db::init_db,
     };
 

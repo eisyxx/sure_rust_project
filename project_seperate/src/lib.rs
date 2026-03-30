@@ -5,12 +5,15 @@ pub mod service;
 pub mod handler;
 pub mod repository;
 
-use crate::service::game_service;
+use crate::service::orchestrator;
 
 pub struct AppState {
     pub conn: Mutex<Connection>,
-    pub session: Mutex<game_service::SessionState>,
+    pub session: Mutex<orchestrator::SessionState>,
 }
 
 #[cfg(test)]
 mod unit_test;
+
+#[cfg(test)]
+mod integration_test;

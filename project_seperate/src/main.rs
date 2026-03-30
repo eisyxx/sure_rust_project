@@ -4,9 +4,9 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use project::handler::turn_handler;
+use project::handler;
 use project::repository;
-use project::service::game_service;
+use project::service::orchestrator;
 use project::AppState;
 
 fn frontend_path(path: &str) -> PathBuf {
@@ -23,7 +23,7 @@ async fn index(data: web::Data<AppState>) -> actix_web::Result<NamedFile> {
         Err(_) => return Err(actix_web::error::ErrorInternalServerError("DB 잠금 실패")),
     };
 
-    let new_session = game_service::init_session(&conn)
+    let new_session = orchestrator::init_session(&conn)
         .map_err(|e| actix_web::error::ErrorInternalServerError(e.to_string()))?;
 
     let mut session = match data.session.lock() {
@@ -64,7 +64,7 @@ async fn main() -> std::io::Result<()> {
 
     let app_state = web::Data::new(AppState {
         conn: Mutex::new(conn),
-        session: Mutex::new(game_service::SessionState {
+        session: Mutex::new(orchestrator::SessionState {
             current_turn_index: 0,
             game_finished: false,
             winner_id: None,
@@ -83,17 +83,17 @@ async fn main() -> std::io::Result<()> {
             .service(map_script)
             .service(stylesheet)
             .service(result_page)
-            .service(turn_handler::get_state)
-            .service(turn_handler::post_turn)
-            .service(turn_handler::post_decide)
-            .service(turn_handler::get_transaction)
-            .service(turn_handler::get_result)
-            .service(turn_handler::post_reset)
+            .service(handler::get_state)
+            .service(handler::post_turn)
+            .service(handler::post_decide)
+            .service(handler::get_transaction)
+            .service(handler::get_result)
+            .service(handler::post_reset)
             .service(Files::new("/assets", frontend_path("assets")))
             .service(Files::new("/", frontend_path("")).index_file("index.html"))
     })
-    // .bind("127.0.0.1:8080")? 로컬에서 테스트할 때 사용
-    .bind(format!("0.0.0.0:{}", port))? // 클라우드에서 실행할 때 사용
+    .bind("127.0.0.1:8080")? // 로컬에서 테스트할 때 사용
+    // .bind(format!("0.0.0.0:{}", port))? // 클라우드에서 실행할 때 사용
     .run()
     .await
 }
