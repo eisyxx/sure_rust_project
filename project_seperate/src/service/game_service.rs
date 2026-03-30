@@ -1,10 +1,9 @@
 use rusqlite::Connection;
-use serde::Serialize;
 
 use crate::repository::{
     player_repo::{get_all_players, get_player_states, PlayerRow, PlayerState},
-    property_repo::get_owned_tiles,
-    transcaction_repo::get_transactions_by_player,
+    property_repo::{get_owned_tiles, TileOwnerRecord},
+    transcaction_repo::{get_transactions_by_player, TransactionRecord},
 };
 
 use crate::service::buy_property_service::{is_purchasable_tile, decide_buy_property, BuyResult};
@@ -42,48 +41,18 @@ pub struct SessionState {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  API 응답용 DTO
+//  서비스 반환용 도메인 결과 타입
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-#[derive(Serialize)]
-pub struct ApiPlayer {
-    pub id: i32,
-    pub name: String,
-    pub position: i32,
-    pub money: i32,
-    pub lap: i32,
-    pub turn_order: i32,
-    pub is_bankrupt: bool,
-}
-
-#[derive(Serialize)]
-pub struct ApiTransaction {
-    pub id: i32,
-    pub tx_type: String,
-    pub amount: i32,
-    pub target: String,
-    pub balance_before: i32,
-    pub balance_after: i32,
-    pub created_at: String,
-}
-
-#[derive(Serialize)]
-pub struct ApiTileOwner {
-    pub tile_id: i32,
-    pub owner_id: i32,
-}
-
-#[derive(Serialize)]
-pub struct ApiStateResponse {
-    pub players: Vec<ApiPlayer>,
-    pub tile_owners: Vec<ApiTileOwner>,
+pub struct StateResult {
+    pub players: Vec<PlayerState>,
+    pub tile_owners: Vec<TileOwnerRecord>,
     pub current_player_id: Option<i32>,
     pub game_finished: bool,
     pub winner_id: Option<i32>,
 }
 
-#[derive(Serialize)]
-pub struct ApiTurnResponse {
+pub struct TurnOutcome {
     pub player_id: i32,
     pub dice: i32,
     pub old_position: i32,
@@ -94,18 +63,15 @@ pub struct ApiTurnResponse {
     pub action_type: &'static str,
     pub action_amount: i32,
     pub owner_id: Option<i32>,
-    pub players: Vec<ApiPlayer>,
-    pub tile_owners: Vec<ApiTileOwner>,
+    pub players: Vec<PlayerState>,
+    pub tile_owners: Vec<TileOwnerRecord>,
     pub current_player_id: Option<i32>,
     pub game_finished: bool,
     pub winner_id: Option<i32>,
 }
 
-#[derive(Serialize)]
-pub struct PlayerFrontend {
+pub struct ResultPlayer {
     pub id: i32,
-    pub name: String,
-    pub image_url: String,
     pub money: i32,
     pub is_bankrupt: bool,
     pub rank: Option<usize>,
@@ -114,32 +80,6 @@ pub struct PlayerFrontend {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  내부 유틸리티
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-fn map_players(players: Vec<PlayerState>) -> Vec<ApiPlayer> {
-    players
-        .into_iter()
-        .map(|p| ApiPlayer {
-            id: p.id,
-            name: p.name,
-            position: p.position,
-            money: p.money,
-            lap: p.lap,
-            turn_order: p.turn_order,
-            is_bankrupt: p.is_bankrupt,
-        })
-        .collect()
-}
-
-fn map_tile_owners(conn: &Connection) -> rusqlite::Result<Vec<ApiTileOwner>> {
-    let records = get_owned_tiles(conn)?;
-    Ok(records
-        .into_iter()
-        .map(|r| ApiTileOwner {
-            tile_id: r.tile_id,
-            owner_id: r.owner_id,
-        })
-        .collect())
-}
 
 fn map_action(action: &TurnAction) -> (&'static str, i32, Option<i32>) {
     match action {
@@ -208,13 +148,13 @@ pub fn init_session(conn: &Connection) -> rusqlite::Result<SessionState> {
 }
 
 /// 현재 게임 상태 조회
-pub fn get_state(conn: &Connection, session: &SessionState) -> rusqlite::Result<ApiStateResponse> {
+pub fn get_state(conn: &Connection, session: &SessionState) -> rusqlite::Result<StateResult> {
     let players = get_player_states(conn)?;
     let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
-    let tile_owners = map_tile_owners(conn)?;
+    let tile_owners = get_owned_tiles(conn)?;
 
-    Ok(ApiStateResponse {
-        players: map_players(players),
+    Ok(StateResult {
+        players,
         tile_owners,
         current_player_id,
         game_finished: session.game_finished,
@@ -223,31 +163,18 @@ pub fn get_state(conn: &Connection, session: &SessionState) -> rusqlite::Result<
 }
 
 /// 특정 플레이어의 거래 내역 조회
-pub fn get_transactions(conn: &Connection, player_id: i32) -> rusqlite::Result<Vec<ApiTransaction>> {
-    let transactions = get_transactions_by_player(conn, player_id)?;
-
-    Ok(transactions
-        .into_iter()
-        .map(|tx| ApiTransaction {
-            id: tx.id,
-            tx_type: tx.tx_type,
-            amount: tx.amount,
-            target: tx.target,
-            balance_before: tx.balance_before,
-            balance_after: tx.balance_after,
-            created_at: tx.created_at,
-        })
-        .collect())
+pub fn get_transactions(conn: &Connection, player_id: i32) -> rusqlite::Result<Vec<TransactionRecord>> {
+    get_transactions_by_player(conn, player_id)
 }
 
 /// 한 턴 진행
-pub fn process_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::Result<ApiTurnResponse> {
+pub fn process_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::Result<TurnOutcome> {
     let players = get_active_game_players(conn)?;
 
     if players.is_empty() {
         advance_turn(conn, session)?;
 
-        return Ok(ApiTurnResponse {
+        return Ok(TurnOutcome {
             player_id: 0,
             dice: 0,
             old_position: 0,
@@ -303,10 +230,10 @@ pub fn process_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::
         });
 
         let players_after = get_player_states(conn)?;
-        let tile_owners = map_tile_owners(conn)?;
+        let tile_owners = get_owned_tiles(conn)?;
         let cpi = resolve_current_player_id(conn, session.current_turn_index)?;
 
-        return Ok(ApiTurnResponse {
+        return Ok(TurnOutcome {
             player_id: current_player.id,
             dice: move_step.dice,
             old_position: current_player.position,
@@ -317,7 +244,7 @@ pub fn process_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::
             action_type: "can_buy",
             action_amount: tile_price,
             owner_id: None,
-            players: map_players(players_after),
+            players: players_after,
             tile_owners,
             current_player_id: cpi,
             game_finished: false,
@@ -346,12 +273,12 @@ pub fn process_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::
     advance_turn(conn, session)?;
 
     let players_after = get_player_states(conn)?;
-    let tile_owners = map_tile_owners(conn)?;
+    let tile_owners = get_owned_tiles(conn)?;
     let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
 
     let (action_type, action_amount, owner_id) = map_action(&turn_result.action);
 
-    Ok(ApiTurnResponse {
+    Ok(TurnOutcome {
         player_id,
         dice: turn_result.dice,
         old_position,
@@ -362,7 +289,7 @@ pub fn process_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::
         action_type,
         action_amount,
         owner_id,
-        players: map_players(players_after),
+        players: players_after,
         tile_owners,
         current_player_id,
         game_finished: session.game_finished,
@@ -375,7 +302,7 @@ pub fn process_decide(
     conn: &Connection,
     session: &mut SessionState,
     will_buy: bool,
-) -> rusqlite::Result<ApiTurnResponse> {
+) -> rusqlite::Result<TurnOutcome> {
     let pending = match session.pending.take() {
         Some(p) => p,
         None => return Err(rusqlite::Error::QueryReturnedNoRows),
@@ -402,10 +329,10 @@ pub fn process_decide(
     advance_turn(conn, session)?;
 
     let players_after = get_player_states(conn)?;
-    let tile_owners = map_tile_owners(conn)?;
+    let tile_owners = get_owned_tiles(conn)?;
     let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
 
-    Ok(ApiTurnResponse {
+    Ok(TurnOutcome {
         player_id: pending.player_id,
         dice: pending.dice,
         old_position: pending.old_position,
@@ -416,7 +343,7 @@ pub fn process_decide(
         action_type,
         action_amount,
         owner_id: None,
-        players: map_players(players_after),
+        players: players_after,
         tile_owners,
         current_player_id,
         game_finished: session.game_finished,
@@ -425,7 +352,7 @@ pub fn process_decide(
 }
 
 /// 게임 결과 조회
-pub fn get_result(conn: &Connection, session: &SessionState) -> Vec<PlayerFrontend> {
+pub fn get_result(conn: &Connection, session: &SessionState) -> Vec<ResultPlayer> {
     let all_players = match get_all_players(conn) {
         Ok(players) => players,
         Err(_) => return vec![],
@@ -437,37 +364,21 @@ pub fn get_result(conn: &Connection, session: &SessionState) -> Vec<PlayerFronte
             .enumerate()
             .map(|(i, (player_id, money))| {
                 let player_opt = all_players.iter().find(|p| p.id == *player_id);
+                let is_bankrupt = player_opt.map(|p| p.is_bankrupt).unwrap_or(true);
 
-                match player_opt {
-                    Some(p) => PlayerFrontend {
-                        id: p.id,
-                        name: format!("Player {}", p.id),
-                        image_url: format!("/assets/player{}_icon.png", p.id),
-                        money: *money,
-                        is_bankrupt: p.is_bankrupt,
-                        rank: if p.is_bankrupt { None } else { Some(i + 1) },
-                    },
-                    None => {
-                        println!("⚠️ player_id {} not found in DB", player_id);
-                        PlayerFrontend {
-                            id: *player_id,
-                            name: format!("Player {}", player_id),
-                            image_url: format!("/assets/player{}_icon.png", player_id),
-                            money: *money,
-                            is_bankrupt: true,
-                            rank: None,
-                        }
-                    }
+                ResultPlayer {
+                    id: *player_id,
+                    money: *money,
+                    is_bankrupt,
+                    rank: if is_bankrupt { None } else { Some(i + 1) },
                 }
             })
             .collect()
     } else {
         all_players
             .iter()
-            .map(|p| PlayerFrontend {
+            .map(|p| ResultPlayer {
                 id: p.id,
-                name: format!("Player {}", p.id),
-                image_url: format!("/assets/player{}_icon.png", p.id),
                 money: p.money,
                 is_bankrupt: p.is_bankrupt,
                 rank: None,
