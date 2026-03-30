@@ -92,8 +92,8 @@ async fn main() -> std::io::Result<()> {
             .service(Files::new("/assets", frontend_path("assets")))
             .service(Files::new("/", frontend_path("")).index_file("index.html"))
     })
-    .bind("127.0.0.1:8080")? // 로컬에서 테스트할 때 사용
-    // .bind(format!("0.0.0.0:{}", port))? // 클라우드에서 실행할 때 사용
+    // .bind("127.0.0.1:8080")? // 로컬에서 테스트할 때 사용
+    .bind(format!("0.0.0.0:{}", port))? // 클라우드에서 실행할 때 사용
     .run()
     .await
 }
