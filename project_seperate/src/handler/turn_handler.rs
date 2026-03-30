@@ -1,455 +1,141 @@
 //! # 턴 핸들러 (Turn Handler)
 //!
-//! 보드게임의 턴 진행, 구매 결정, 게임 상태 조회 등
-//! API 요청을 처리하는 핸들러 모듈.
-//!
-//! ## 주요 기능
-//! - `get_state`: 현재 게임 상태 조회
-//! - `get_transactions`: 특정 플레이어의 거래 내역 조회
-//! - `handle_turn`: 한 턴 진행 (주사위 → 이동 → 액션 처리)
-//! - `handle_decide`: 구매 가능 타일에 대한 구매/패스 결정 처리
+//! 6개의 얇은 HTTP 엔드포인트 함수만 제공.
+//! 비즈니스 로직은 service::game_service 에 위임한다.
 
-use rusqlite::Connection;
-use serde::Serialize;
+use actix_web::{get, post, web, HttpResponse};
 
-// ── Repository 의존성 ──
-use crate::repository::{
-    player_repo::{get_player_states, PlayerState},
-    property_repo::get_owned_tiles,
-    transcaction_repo::get_transactions_by_player,
-};
+use crate::AppState;
+use crate::service::game_service;
 
-// ── Service 의존성 ──
-use crate::service::buy_property_service::{is_purchasable_tile, decide_buy_property, BuyResult};
-use crate::service::game_end_service::{evaluate_and_apply_game_end, Player as GamePlayer};
-use crate::service::turn_execute_service::{apply_turn_result, pre_apply_move_salary, apply_purchase};
-use crate::service::turn_service::{
-    build_landing_context, build_turn_result, roll_and_move, get_active_game_players,
-    resolve_current_player_id, TurnAction,
-};
+// 타입 재공개 (main.rs의 AppState, 테스트 등에서 사용)
+pub use game_service::{SessionState, PendingTurn};
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  세션 및 대기 상태 구조체
+//  요청 바디 DTO
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/// 구매 결정 대기 중인 턴 상태.
-///
-/// 플레이어가 구매 가능한 타일에 도착했을 때,
-/// 구매 여부를 클라이언트로부터 받기 전까지 보관하는 중간 상태.
-pub struct PendingTurn {
-    pub player_id: i32,
-    pub dice: i32,
-    pub old_position: i32,
-    pub new_position: i32,
-    pub old_lap: i32,
-    pub new_lap: i32,
-    pub salary: i32,
-    pub tile_price: i32,
-    pub money_after_salary: i32,
-}
-
-/// 게임 세션의 전체 상태를 관리하는 구조체.
-///
-/// 현재 턴 인덱스, 게임 종료 여부, 승자, 대기 중인 구매 결정 등
-/// 한 게임 세션에 필요한 모든 상태를 보관한다.
-pub struct SessionState {
-    /// 활성 플레이어 목록 내에서의 현재 턴 인덱스
-    pub current_turn_index: usize,
-    /// 게임 종료 여부
-    pub game_finished: bool,
-    /// 게임 종료 시 승자의 플레이어 ID
-    pub winner_id: Option<i32>,
-    /// 구매 결정 대기 상태 (구매 가능 타일에 도착 시 설정)
-    pub pending: Option<PendingTurn>,
-    /// 게임 종료 시 최종 순위 (player_id, 보상금)
-    pub final_rankings: Option<Vec<(i32, i32)>>,
-    /// 현재 게임에 참여 중인 플레이어 목록
-    pub players: Vec<GamePlayer>,
+#[derive(serde::Deserialize)]
+pub struct DecideBody {
+    pub will_buy: bool,
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  API 응답용 DTO (Data Transfer Object)
+//  6개 API 핸들러 (HTTP 입출력 전용)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/// API로 반환할 플레이어 정보
-#[derive(Serialize)]
-pub struct ApiPlayer {
-    pub id: i32,
-    pub name: String,
-    pub position: i32,
-    pub money: i32,
-    pub lap: i32,
-    pub turn_order: i32,
-    pub is_bankrupt: bool,
-}
-
-/// API로 반환할 거래 내역 정보
-#[derive(Serialize)]
-pub struct ApiTransaction {
-    pub id: i32,
-    pub tx_type: String,
-    pub amount: i32,
-    pub target: String,
-    pub balance_before: i32,
-    pub balance_after: i32,
-    pub created_at: String,
-}
-
-/// API로 반환할 타일(토지) 소유 정보
-#[derive(Serialize)]
-pub struct ApiTileOwner {
-    pub tile_id: i32,
-    pub owner_id: i32,
-}
-
-/// 게임 전체 상태 조회 API의 응답 구조체
-#[derive(Serialize)]
-pub struct ApiStateResponse {
-    pub players: Vec<ApiPlayer>,
-    pub tile_owners: Vec<ApiTileOwner>,
-    pub current_player_id: Option<i32>,
-    pub game_finished: bool,
-    pub winner_id: Option<i32>,
-}
-
-/// 턴 진행 / 구매 결정 API의 응답 구조체.
-/// 턴 결과(주사위, 이동, 액션)와 갱신된 게임 상태를 함께 반환한다.
-#[derive(Serialize)]
-pub struct ApiTurnResponse {
-    pub player_id: i32,
-    pub dice: i32,
-    pub old_position: i32,
-    pub new_position: i32,
-    pub old_lap: i32,
-    pub new_lap: i32,
-    pub salary: i32,
-    pub action_type: &'static str,
-    pub action_amount: i32,
-    pub owner_id: Option<i32>,
-    pub players: Vec<ApiPlayer>,
-    pub tile_owners: Vec<ApiTileOwner>,
-    pub current_player_id: Option<i32>,
-    pub game_finished: bool,
-    pub winner_id: Option<i32>,
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  내부 유틸리티 함수 (응답 조립용)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-/// 내부 `PlayerState` 목록을 API 응답용 `ApiPlayer` 목록으로 변환한다.
-fn map_players(players: Vec<PlayerState>) -> Vec<ApiPlayer> {
-    players
-        .into_iter()
-        .map(|player| ApiPlayer {
-            id: player.id,
-            name: player.name,
-            position: player.position,
-            money: player.money,
-            lap: player.lap,
-            turn_order: player.turn_order,
-            is_bankrupt: player.is_bankrupt,
-        })
-        .collect()
-}
-
-/// DB에서 모든 타일의 소유 정보를 조회하여 API 응답 형태로 변환한다.
-fn map_tile_owners(conn: &Connection) -> rusqlite::Result<Vec<ApiTileOwner>> {
-    let records = get_owned_tiles(conn)?;
-
-    Ok(records
-        .into_iter()
-        .map(|record| ApiTileOwner {
-            tile_id: record.tile_id,
-            owner_id: record.owner_id,
-        })
-        .collect())
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  공개 핸들러 함수 (API 엔드포인트에서 호출)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-/// 현재 게임 상태를 조회하여 `ApiStateResponse`로 반환한다.
-///
-/// 플레이어 목록, 타일 소유 현황, 현재 턴 플레이어, 게임 종료 여부를 포함한다.
-pub fn get_state(conn: &Connection, session: &SessionState) -> rusqlite::Result<ApiStateResponse> {
-    let players = get_player_states(conn)?;
-    let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
-    let tile_owners = map_tile_owners(conn)?;
-
-    Ok(ApiStateResponse {
-        players: map_players(players),
-        tile_owners,
-        current_player_id,
-        game_finished: session.game_finished,
-        winner_id: session.winner_id,
-    })
-}
-
-/// 특정 플레이어의 전체 거래 내역을 조회하여 API 응답 형태로 반환한다.
-pub fn get_transactions(conn: &Connection, player_id: i32) -> rusqlite::Result<Vec<ApiTransaction>> {
-    let transactions = get_transactions_by_player(conn, player_id)?;
-
-    Ok(transactions
-        .into_iter()
-        .map(|tx| ApiTransaction {
-            id: tx.id,
-            tx_type: tx.tx_type,
-            amount: tx.amount,
-            target: tx.target,
-            balance_before: tx.balance_before,
-            balance_after: tx.balance_after,
-            created_at: tx.created_at,
-        })
-        .collect())
-}
-
-/// 한 턴을 진행하는 메인 핸들러.
-///
-/// ## 처리 흐름
-/// 1. 활성(파산하지 않은) 플레이어 목록을 조회한다.
-/// 2. 현재 턴 플레이어가 주사위를 굴려 이동한다.
-/// 3. 도착한 타일에 따라 분기 처리:
-///    - **구매 가능 타일**: 이동·월급만 선반영 후 `PendingTurn` 설정 → 클라이언트에 구매 여부 질의
-///    - **그 외 타일**: 통행료 지불, 이벤트 처리 등을 즉시 실행
-/// 4. 턴 종료 후 게임 종료 여부를 판단한다.
-pub fn handle_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::Result<ApiTurnResponse> {
-    // 서비스에서 활성(비파산) 플레이어 목록 조회
-    let players = get_active_game_players(conn)?;
-
-    // 활성 플레이어가 없으면 서비스의 종료 판정 로직으로 상태를 확정
-    if players.is_empty() {
-        advance_turn(conn, session, 0)?;
-
-        return Ok(ApiTurnResponse {
-            player_id: 0,
-            dice: 0,
-            old_position: 0,
-            new_position: 0,
-            old_lap: 0,
-            new_lap: 0,
-            salary: 0,
-            action_type: "none",
-            action_amount: 0,
-            owner_id: None,
-            players: vec![],
-            tile_owners: vec![],
-            current_player_id: None,
-            game_finished: session.game_finished,
-            winner_id: session.winner_id,
-        });
-    }
-
-    // 턴 인덱스가 범위를 벗어나면 0으로 초기화 (라운드 시작)
-    if session.current_turn_index >= players.len() {
-        session.current_turn_index = 0;
-    }
-
-    let current_player = &players[session.current_turn_index];
-
-    // 주사위 굴리기 → 새 위치·랩·월급 계산 (보드 크기: 24칸)
-    let move_step = roll_and_move(current_player.position, current_player.lap, 24);
-
-    // 도착 타일 정보 조회 + 월급 반영 후 잔액 계산(서비스)
-    let landing = build_landing_context(
-        conn,
-        move_step.new_position,
-        current_player.money,
-        move_step.salary,
-    );
-    let tile_price = landing.tile_price;
-    let tile_toll = landing.tile_toll;
-    let tile_owner = landing.tile_owner;
-    let tile_type = landing.tile_type;
-    let money_after_salary = landing.money_after_salary;
-
-    // ── 분기 1: 구매 가능 타일 (소유자 없음) → 구매 여부를 클라이언트에 질의 ──
-    if is_purchasable_tile(tile_owner, &tile_type, tile_price) {
-        // 이동 + 월급만 먼저 DB에 반영 (구매 결정은 아직 미반영)
-        pre_apply_move_salary(conn, current_player.id, move_step.new_position, move_step.new_lap, move_step.salary)?;
-
-        // 구매 결정 대기 상태 저장 → 이후 handle_decide()에서 처리
-        session.pending = Some(PendingTurn {
-            player_id: current_player.id,
-            dice: move_step.dice,
-            old_position: current_player.position,
-            new_position: move_step.new_position,
-            old_lap: current_player.lap,
-            new_lap: move_step.new_lap,
-            salary: move_step.salary,
-            tile_price,
-            money_after_salary,
-        });
-
-        let players_after = get_player_states(conn)?;
-        let tile_owners = map_tile_owners(conn)?;
-        let cpi = resolve_current_player_id(conn, session.current_turn_index)?;
-
-        return Ok(ApiTurnResponse {
-            player_id: current_player.id,
-            dice: move_step.dice,
-            old_position: current_player.position,
-            new_position: move_step.new_position,
-            old_lap: current_player.lap,
-            new_lap: move_step.new_lap,
-            salary: move_step.salary,
-            action_type: "can_buy",
-            action_amount: tile_price,
-            owner_id: None,
-            players: map_players(players_after),
-            tile_owners,
-            current_player_id: cpi,
-            game_finished: false,
-            winner_id: None,
-        });
-    }
-
-    // ── 분기 2: 구매 불가 타일 (통행료 / 이벤트 / 빈 타일) → 턴 즉시 완료 ──
-    let old_position = current_player.position;
-    let old_lap = current_player.lap;
-    let player_id = current_player.id;
-
-    // 턴 결과(액션 종류, 금액 변동 등)를 계산하고 DB에 반영
-    let turn_result = build_turn_result(
-        conn,
-        move_step,
-        player_id,
-        money_after_salary,
-        tile_price,
-        tile_toll,
-        tile_owner,
-        false,
-        &tile_type,
-    );
-    apply_turn_result(conn, player_id, &turn_result)?;
-
-    // 다음 턴으로 진행 및 게임 종료 여부 판단
-    advance_turn(conn, session, player_id)?;
-
-    // 갱신된 상태를 DB에서 다시 조회
-    let players_after = get_player_states(conn)?;
-    let tile_owners = map_tile_owners(conn)?;
-    let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
-
-    // TurnAction 열거형을 API 응답용 문자열·숫자로 매핑
-    let (action_type, action_amount, owner_id) = match &turn_result.action {
-        TurnAction::None => ("none", 0, None),
-        TurnAction::Purchase { price } => ("purchase", *price, None),
-        TurnAction::PayToll { owner_id, amount } => ("pay_toll", *amount, Some(*owner_id)),
-        TurnAction::Bankrupt { owner_id, paid } => ("bankrupt", *paid, Some(*owner_id)),
-        TurnAction::EventWelfareFund { amount } => ("welfare_fund", *amount, None),
-        TurnAction::EventWelfareFundBankrupt { paid } => ("welfare_fund_bankrupt", *paid, None),
-        TurnAction::EventFundReceive { amount } => ("fund_receive", *amount, None),
-        TurnAction::FundReceiveEmpty => ("fund_receive_empty", 0, None),
-        TurnAction::EstateTax { amount } => ("estate_tax", *amount, None),
-        TurnAction::EstateTaxBankrupt { paid } => ("estate_tax_bankrupt", *paid, None),
-        TurnAction::EstateTaxSkipped => ("estate_tax_skipped", 0, None),
+#[get("/api/state")]
+pub async fn get_state(data: web::Data<AppState>) -> HttpResponse {
+    let session = match data.session.lock() {
+        Ok(s) => s,
+        Err(_) => return HttpResponse::InternalServerError().body("세션 잠금 실패"),
+    };
+    let conn = match data.conn.lock() {
+        Ok(c) => c,
+        Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
     };
 
-    Ok(ApiTurnResponse {
-        player_id,
-        dice: turn_result.dice,
-        old_position,
-        new_position: turn_result.new_position,
-        old_lap,
-        new_lap: turn_result.new_lap,
-        salary: turn_result.salary,
-        action_type,
-        action_amount,
-        owner_id,
-        players: map_players(players_after),
-        tile_owners,
-        current_player_id,
-        game_finished: session.game_finished,
-        winner_id: session.winner_id,
-    })
+    match game_service::get_state(&conn, &session) {
+        Ok(state) => HttpResponse::Ok().json(state),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
 }
 
-/// 구매 가능 타일에 대한 플레이어의 구매/패스 결정을 처리하고 턴을 완료한다.
-///
-/// `handle_turn`에서 `PendingTurn`이 설정된 경우에만 호출해야 한다.
-/// `will_buy`가 `true`이면 타일을 구매하고, `false`이면 구매를 건너뛴다.
-pub fn handle_decide(
-    conn: &Connection,
-    session: &mut SessionState,
-    will_buy: bool,
-) -> rusqlite::Result<ApiTurnResponse> {
-    // 대기 중인 구매 결정이 없으면 에러 반환
-    let pending = match session.pending.take() {
-        Some(p) => p,
-        None => return Err(rusqlite::Error::QueryReturnedNoRows),
+#[post("/api/turn")]
+pub async fn post_turn(data: web::Data<AppState>) -> HttpResponse {
+    let mut session = match data.session.lock() {
+        Ok(s) => s,
+        Err(_) => return HttpResponse::InternalServerError().body("세션 잠금 실패"),
     };
 
-    // 구매 여부에 따른 결과 계산
-    let buy_result = decide_buy_property(
-        pending.player_id,
-        pending.money_after_salary,
-        pending.tile_price,
-        0,
-        None,
-        will_buy,
-        "property".to_string(),
-    );
-
-    // 구매 시 DB에 소유권·금액 반영, 미구매 시 건너뛰기
-    let (action_type, action_amount) = match &buy_result {
-        BuyResult::Purchase { price } => {
-            apply_purchase(conn, pending.player_id, pending.new_position, *price)?;
-            ("purchase", *price)
-        }
-        _ => ("skip", 0),
-    };
-
-    // 다음 턴으로 진행 및 게임 종료 여부 판단
-    advance_turn(conn, session, pending.player_id)?;
-
-    let players_after = get_player_states(conn)?;
-    let tile_owners = map_tile_owners(conn)?;
-    let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
-
-    Ok(ApiTurnResponse {
-        player_id: pending.player_id,
-        dice: pending.dice,
-        old_position: pending.old_position,
-        new_position: pending.new_position,
-        old_lap: pending.old_lap,
-        new_lap: pending.new_lap,
-        salary: pending.salary,
-        action_type,
-        action_amount,
-        owner_id: None,
-        players: map_players(players_after),
-        tile_owners,
-        current_player_id,
-        game_finished: session.game_finished,
-        winner_id: session.winner_id,
-    })
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  턴 진행 내부 로직
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-/// 다음 턴으로 진행하고 게임 종료 조건을 판단한다.
-/// 서비스(`evaluate_and_apply_game_end`)를 호출하여 게임 종료 여부를 판단하고,
-/// 그 결과를 세션 상태에 반영하는 역할만 담당한다.
-fn advance_turn(
-    conn: &Connection,
-    session: &mut SessionState,
-    _player_id: i32,
-) -> rusqlite::Result<()> {
-    let result = evaluate_and_apply_game_end(conn)?;
-    session.game_finished = result.game_finished;
-
-    if result.game_finished {
-        session.winner_id = result.winner_id;
-        session.final_rankings = result.rankings;
-    } else {
-        session.current_turn_index += 1;
-        session.winner_id = None;
-        session.final_rankings = None;
+    if session.game_finished {
+        return HttpResponse::Conflict().body("게임이 이미 종료되었습니다.");
     }
 
-    Ok(())
+    if session.pending.is_some() {
+        return HttpResponse::Conflict().body("이전 턴의 구매 결정을 먼저 완료해주세요.");
+    }
+
+    let conn = match data.conn.lock() {
+        Ok(c) => c,
+        Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
+    };
+
+    match game_service::process_turn(&conn, &mut session) {
+        Ok(result) => HttpResponse::Ok().json(result),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
+}
+
+#[post("/api/decide")]
+pub async fn post_decide(
+    body: web::Json<DecideBody>,
+    data: web::Data<AppState>,
+) -> HttpResponse {
+    let mut session = match data.session.lock() {
+        Ok(s) => s,
+        Err(_) => return HttpResponse::InternalServerError().body("세션 잠금 실패"),
+    };
+
+    if session.pending.is_none() {
+        return HttpResponse::BadRequest().body("대기 중인 구매 결정이 없습니다.");
+    }
+
+    let conn = match data.conn.lock() {
+        Ok(c) => c,
+        Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
+    };
+
+    match game_service::process_decide(&conn, &mut session, body.will_buy) {
+        Ok(result) => HttpResponse::Ok().json(result),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
+}
+
+#[get("/api/transactions/{player_id}")]
+pub async fn get_transaction(
+    path: web::Path<i32>,
+    data: web::Data<AppState>,
+) -> HttpResponse {
+    let conn = match data.conn.lock() {
+        Ok(c) => c,
+        Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
+    };
+
+    match game_service::get_transactions(&conn, path.into_inner()) {
+        Ok(txs) => HttpResponse::Ok().json(txs),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
+}
+
+#[get("/api/result")]
+pub async fn get_result(data: web::Data<AppState>) -> HttpResponse {
+    let session = match data.session.lock() {
+        Ok(s) => s,
+        Err(_) => return HttpResponse::InternalServerError().body("세션 잠금 실패"),
+    };
+    let conn = match data.conn.lock() {
+        Ok(c) => c,
+        Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
+    };
+
+    let result = game_service::get_result(&conn, &session);
+    HttpResponse::Ok().json(result)
+}
+
+#[post("/api/reset")]
+pub async fn post_reset(data: web::Data<AppState>) -> HttpResponse {
+    let mut session = match data.session.lock() {
+        Ok(s) => s,
+        Err(_) => return HttpResponse::InternalServerError().body("세션 잠금 실패"),
+    };
+    let conn = match data.conn.lock() {
+        Ok(c) => c,
+        Err(_) => return HttpResponse::InternalServerError().body("DB 잠금 실패"),
+    };
+
+    match game_service::reset_game(&conn, &mut session) {
+        Ok(_) => HttpResponse::Ok().body("reset success"),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+    }
 }

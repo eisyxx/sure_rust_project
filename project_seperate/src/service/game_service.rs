@@ -1,0 +1,490 @@
+use rusqlite::Connection;
+use serde::Serialize;
+
+use crate::repository::{
+    player_repo::{get_all_players, get_player_states, PlayerRow, PlayerState},
+    property_repo::get_owned_tiles,
+    transcaction_repo::get_transactions_by_player,
+};
+
+use crate::service::buy_property_service::{is_purchasable_tile, decide_buy_property, BuyResult};
+use crate::service::game_end_service::{evaluate_and_apply_game_end, Player as GamePlayer};
+use crate::service::turn_execute_service::{apply_turn_result, pre_apply_move_salary, apply_purchase};
+use crate::service::turn_service::{
+    build_landing_context, build_turn_result, roll_and_move, get_active_game_players,
+    resolve_current_player_id, TurnAction,
+};
+use crate::repository::init::init_db;
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  세션 및 대기 상태 구조체
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+pub struct PendingTurn {
+    pub player_id: i32,
+    pub dice: i32,
+    pub old_position: i32,
+    pub new_position: i32,
+    pub old_lap: i32,
+    pub new_lap: i32,
+    pub salary: i32,
+    pub tile_price: i32,
+    pub money_after_salary: i32,
+}
+
+pub struct SessionState {
+    pub current_turn_index: usize,
+    pub game_finished: bool,
+    pub winner_id: Option<i32>,
+    pub pending: Option<PendingTurn>,
+    pub final_rankings: Option<Vec<(i32, i32)>>,
+    pub players: Vec<GamePlayer>,
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  API 응답용 DTO
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+#[derive(Serialize)]
+pub struct ApiPlayer {
+    pub id: i32,
+    pub name: String,
+    pub position: i32,
+    pub money: i32,
+    pub lap: i32,
+    pub turn_order: i32,
+    pub is_bankrupt: bool,
+}
+
+#[derive(Serialize)]
+pub struct ApiTransaction {
+    pub id: i32,
+    pub tx_type: String,
+    pub amount: i32,
+    pub target: String,
+    pub balance_before: i32,
+    pub balance_after: i32,
+    pub created_at: String,
+}
+
+#[derive(Serialize)]
+pub struct ApiTileOwner {
+    pub tile_id: i32,
+    pub owner_id: i32,
+}
+
+#[derive(Serialize)]
+pub struct ApiStateResponse {
+    pub players: Vec<ApiPlayer>,
+    pub tile_owners: Vec<ApiTileOwner>,
+    pub current_player_id: Option<i32>,
+    pub game_finished: bool,
+    pub winner_id: Option<i32>,
+}
+
+#[derive(Serialize)]
+pub struct ApiTurnResponse {
+    pub player_id: i32,
+    pub dice: i32,
+    pub old_position: i32,
+    pub new_position: i32,
+    pub old_lap: i32,
+    pub new_lap: i32,
+    pub salary: i32,
+    pub action_type: &'static str,
+    pub action_amount: i32,
+    pub owner_id: Option<i32>,
+    pub players: Vec<ApiPlayer>,
+    pub tile_owners: Vec<ApiTileOwner>,
+    pub current_player_id: Option<i32>,
+    pub game_finished: bool,
+    pub winner_id: Option<i32>,
+}
+
+#[derive(Serialize)]
+pub struct PlayerFrontend {
+    pub id: i32,
+    pub name: String,
+    pub image_url: String,
+    pub money: i32,
+    pub is_bankrupt: bool,
+    pub rank: Option<usize>,
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  내부 유틸리티
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+fn map_players(players: Vec<PlayerState>) -> Vec<ApiPlayer> {
+    players
+        .into_iter()
+        .map(|p| ApiPlayer {
+            id: p.id,
+            name: p.name,
+            position: p.position,
+            money: p.money,
+            lap: p.lap,
+            turn_order: p.turn_order,
+            is_bankrupt: p.is_bankrupt,
+        })
+        .collect()
+}
+
+fn map_tile_owners(conn: &Connection) -> rusqlite::Result<Vec<ApiTileOwner>> {
+    let records = get_owned_tiles(conn)?;
+    Ok(records
+        .into_iter()
+        .map(|r| ApiTileOwner {
+            tile_id: r.tile_id,
+            owner_id: r.owner_id,
+        })
+        .collect())
+}
+
+fn map_action(action: &TurnAction) -> (&'static str, i32, Option<i32>) {
+    match action {
+        TurnAction::None => ("none", 0, None),
+        TurnAction::Purchase { price } => ("purchase", *price, None),
+        TurnAction::PayToll { owner_id, amount } => ("pay_toll", *amount, Some(*owner_id)),
+        TurnAction::Bankrupt { owner_id, paid } => ("bankrupt", *paid, Some(*owner_id)),
+        TurnAction::EventWelfareFund { amount } => ("welfare_fund", *amount, None),
+        TurnAction::EventWelfareFundBankrupt { paid } => ("welfare_fund_bankrupt", *paid, None),
+        TurnAction::EventFundReceive { amount } => ("fund_receive", *amount, None),
+        TurnAction::FundReceiveEmpty => ("fund_receive_empty", 0, None),
+        TurnAction::EstateTax { amount } => ("estate_tax", *amount, None),
+        TurnAction::EstateTaxBankrupt { paid } => ("estate_tax_bankrupt", *paid, None),
+        TurnAction::EstateTaxSkipped => ("estate_tax_skipped", 0, None),
+    }
+}
+
+fn to_game_player(row: &PlayerRow) -> GamePlayer {
+    GamePlayer {
+        id: row.id,
+        position: row.position,
+        money: row.money,
+        lap: row.lap,
+        is_bankrupt: row.is_bankrupt,
+    }
+}
+
+fn advance_turn(
+    conn: &Connection,
+    session: &mut SessionState,
+) -> rusqlite::Result<()> {
+    let result = evaluate_and_apply_game_end(conn)?;
+    session.game_finished = result.game_finished;
+
+    if result.game_finished {
+        session.winner_id = result.winner_id;
+        session.final_rankings = result.rankings;
+    } else {
+        session.current_turn_index += 1;
+        session.winner_id = None;
+        session.final_rankings = None;
+    }
+
+    Ok(())
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  공개 서비스 함수
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/// 세션 초기화 (index 페이지 진입 시)
+pub fn init_session(conn: &Connection) -> rusqlite::Result<SessionState> {
+    init_db::init_db(conn)?;
+
+    let db_players = get_all_players(conn)?;
+    let game_players: Vec<GamePlayer> = db_players.iter().map(to_game_player).collect();
+
+    Ok(SessionState {
+        current_turn_index: 0,
+        game_finished: false,
+        winner_id: None,
+        pending: None,
+        final_rankings: None,
+        players: game_players,
+    })
+}
+
+/// 현재 게임 상태 조회
+pub fn get_state(conn: &Connection, session: &SessionState) -> rusqlite::Result<ApiStateResponse> {
+    let players = get_player_states(conn)?;
+    let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
+    let tile_owners = map_tile_owners(conn)?;
+
+    Ok(ApiStateResponse {
+        players: map_players(players),
+        tile_owners,
+        current_player_id,
+        game_finished: session.game_finished,
+        winner_id: session.winner_id,
+    })
+}
+
+/// 특정 플레이어의 거래 내역 조회
+pub fn get_transactions(conn: &Connection, player_id: i32) -> rusqlite::Result<Vec<ApiTransaction>> {
+    let transactions = get_transactions_by_player(conn, player_id)?;
+
+    Ok(transactions
+        .into_iter()
+        .map(|tx| ApiTransaction {
+            id: tx.id,
+            tx_type: tx.tx_type,
+            amount: tx.amount,
+            target: tx.target,
+            balance_before: tx.balance_before,
+            balance_after: tx.balance_after,
+            created_at: tx.created_at,
+        })
+        .collect())
+}
+
+/// 한 턴 진행
+pub fn process_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::Result<ApiTurnResponse> {
+    let players = get_active_game_players(conn)?;
+
+    if players.is_empty() {
+        advance_turn(conn, session)?;
+
+        return Ok(ApiTurnResponse {
+            player_id: 0,
+            dice: 0,
+            old_position: 0,
+            new_position: 0,
+            old_lap: 0,
+            new_lap: 0,
+            salary: 0,
+            action_type: "none",
+            action_amount: 0,
+            owner_id: None,
+            players: vec![],
+            tile_owners: vec![],
+            current_player_id: None,
+            game_finished: session.game_finished,
+            winner_id: session.winner_id,
+        });
+    }
+
+    if session.current_turn_index >= players.len() {
+        session.current_turn_index = 0;
+    }
+
+    let current_player = &players[session.current_turn_index];
+
+    let move_step = roll_and_move(current_player.position, current_player.lap, 24);
+
+    let landing = build_landing_context(
+        conn,
+        move_step.new_position,
+        current_player.money,
+        move_step.salary,
+    );
+    let tile_price = landing.tile_price;
+    let tile_toll = landing.tile_toll;
+    let tile_owner = landing.tile_owner;
+    let tile_type = landing.tile_type;
+    let money_after_salary = landing.money_after_salary;
+
+    // 구매 가능 타일 → 구매 여부를 클라이언트에 질의
+    if is_purchasable_tile(tile_owner, &tile_type, tile_price) {
+        pre_apply_move_salary(conn, current_player.id, move_step.new_position, move_step.new_lap, move_step.salary)?;
+
+        session.pending = Some(PendingTurn {
+            player_id: current_player.id,
+            dice: move_step.dice,
+            old_position: current_player.position,
+            new_position: move_step.new_position,
+            old_lap: current_player.lap,
+            new_lap: move_step.new_lap,
+            salary: move_step.salary,
+            tile_price,
+            money_after_salary,
+        });
+
+        let players_after = get_player_states(conn)?;
+        let tile_owners = map_tile_owners(conn)?;
+        let cpi = resolve_current_player_id(conn, session.current_turn_index)?;
+
+        return Ok(ApiTurnResponse {
+            player_id: current_player.id,
+            dice: move_step.dice,
+            old_position: current_player.position,
+            new_position: move_step.new_position,
+            old_lap: current_player.lap,
+            new_lap: move_step.new_lap,
+            salary: move_step.salary,
+            action_type: "can_buy",
+            action_amount: tile_price,
+            owner_id: None,
+            players: map_players(players_after),
+            tile_owners,
+            current_player_id: cpi,
+            game_finished: false,
+            winner_id: None,
+        });
+    }
+
+    // 구매 불가 타일 → 턴 즉시 완료
+    let old_position = current_player.position;
+    let old_lap = current_player.lap;
+    let player_id = current_player.id;
+
+    let turn_result = build_turn_result(
+        conn,
+        move_step,
+        player_id,
+        money_after_salary,
+        tile_price,
+        tile_toll,
+        tile_owner,
+        false,
+        &tile_type,
+    );
+    apply_turn_result(conn, player_id, &turn_result)?;
+
+    advance_turn(conn, session)?;
+
+    let players_after = get_player_states(conn)?;
+    let tile_owners = map_tile_owners(conn)?;
+    let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
+
+    let (action_type, action_amount, owner_id) = map_action(&turn_result.action);
+
+    Ok(ApiTurnResponse {
+        player_id,
+        dice: turn_result.dice,
+        old_position,
+        new_position: turn_result.new_position,
+        old_lap,
+        new_lap: turn_result.new_lap,
+        salary: turn_result.salary,
+        action_type,
+        action_amount,
+        owner_id,
+        players: map_players(players_after),
+        tile_owners,
+        current_player_id,
+        game_finished: session.game_finished,
+        winner_id: session.winner_id,
+    })
+}
+
+/// 구매 결정 처리
+pub fn process_decide(
+    conn: &Connection,
+    session: &mut SessionState,
+    will_buy: bool,
+) -> rusqlite::Result<ApiTurnResponse> {
+    let pending = match session.pending.take() {
+        Some(p) => p,
+        None => return Err(rusqlite::Error::QueryReturnedNoRows),
+    };
+
+    let buy_result = decide_buy_property(
+        pending.player_id,
+        pending.money_after_salary,
+        pending.tile_price,
+        0,
+        None,
+        will_buy,
+        "property".to_string(),
+    );
+
+    let (action_type, action_amount) = match &buy_result {
+        BuyResult::Purchase { price } => {
+            apply_purchase(conn, pending.player_id, pending.new_position, *price)?;
+            ("purchase", *price)
+        }
+        _ => ("skip", 0),
+    };
+
+    advance_turn(conn, session)?;
+
+    let players_after = get_player_states(conn)?;
+    let tile_owners = map_tile_owners(conn)?;
+    let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
+
+    Ok(ApiTurnResponse {
+        player_id: pending.player_id,
+        dice: pending.dice,
+        old_position: pending.old_position,
+        new_position: pending.new_position,
+        old_lap: pending.old_lap,
+        new_lap: pending.new_lap,
+        salary: pending.salary,
+        action_type,
+        action_amount,
+        owner_id: None,
+        players: map_players(players_after),
+        tile_owners,
+        current_player_id,
+        game_finished: session.game_finished,
+        winner_id: session.winner_id,
+    })
+}
+
+/// 게임 결과 조회
+pub fn get_result(conn: &Connection, session: &SessionState) -> Vec<PlayerFrontend> {
+    let all_players = match get_all_players(conn) {
+        Ok(players) => players,
+        Err(_) => return vec![],
+    };
+
+    if let Some(rankings) = &session.final_rankings {
+        rankings
+            .iter()
+            .enumerate()
+            .map(|(i, (player_id, money))| {
+                let player_opt = all_players.iter().find(|p| p.id == *player_id);
+
+                match player_opt {
+                    Some(p) => PlayerFrontend {
+                        id: p.id,
+                        name: format!("Player {}", p.id),
+                        image_url: format!("/assets/player{}_icon.png", p.id),
+                        money: *money,
+                        is_bankrupt: p.is_bankrupt,
+                        rank: if p.is_bankrupt { None } else { Some(i + 1) },
+                    },
+                    None => {
+                        println!("⚠️ player_id {} not found in DB", player_id);
+                        PlayerFrontend {
+                            id: *player_id,
+                            name: format!("Player {}", player_id),
+                            image_url: format!("/assets/player{}_icon.png", player_id),
+                            money: *money,
+                            is_bankrupt: true,
+                            rank: None,
+                        }
+                    }
+                }
+            })
+            .collect()
+    } else {
+        all_players
+            .iter()
+            .map(|p| PlayerFrontend {
+                id: p.id,
+                name: format!("Player {}", p.id),
+                image_url: format!("/assets/player{}_icon.png", p.id),
+                money: p.money,
+                is_bankrupt: p.is_bankrupt,
+                rank: None,
+            })
+            .collect()
+    }
+}
+
+/// 게임 리셋
+pub fn reset_game(conn: &Connection, session: &mut SessionState) -> rusqlite::Result<()> {
+    init_db::init_db(conn)?;
+
+    session.current_turn_index = 0;
+    session.game_finished = false;
+    session.winner_id = None;
+    session.pending = None;
+    session.final_rankings = None;
+
+    Ok(())
+}

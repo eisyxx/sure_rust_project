@@ -2,7 +2,7 @@
 mod tests {
     use rusqlite::Connection;
 
-    use::project::handler::turn_handler::{handle_turn, handle_decide, SessionState, get_transactions};
+    use project::service::game_service::{process_turn, process_decide, get_transactions, SessionState};
     use project::repository::{
         init::init_db::init_db,
     };
@@ -39,13 +39,13 @@ mod tests {
         let mut turn_count = 0;
 
         while !session.game_finished && turn_count < 1000 {
-            let response = handle_turn(&conn, &mut session).unwrap();
+            let response = process_turn(&conn, &mut session).unwrap();
 
             // 구매 가능한 경우 → 강제로 구매/스킵 둘 다 경험
             if response.action_type == "can_buy" {
                 let will_buy = turn_count % 2 == 0;
 
-                let _ = handle_decide(&conn, &mut session, will_buy).unwrap();
+                let _ = process_decide(&conn, &mut session, will_buy).unwrap();
             }
 
             turn_count += 1;
