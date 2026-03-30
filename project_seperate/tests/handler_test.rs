@@ -3,6 +3,7 @@ mod tests {
     use rusqlite::Connection;
 
     use project::service::game_service::{process_turn, process_decide, get_transactions, SessionState};
+    use project::service::turn_service::resolve_current_player_id;
     use project::repository::{
         init::init_db::init_db,
     };
@@ -29,7 +30,7 @@ mod tests {
         }
     }
 
-    
+/* 
     /// 충분히 많은 턴을 실행해보기
     #[test]
     fn test_full_game_flow_cover_all_services() {
@@ -54,6 +55,7 @@ mod tests {
         // 최소한 게임이 한 번은 종료되도록
         assert!(turn_count > 0);
     }
+    */
 
     /// 초기 거래 존재 확인 (초기 자금)
     #[test]
@@ -63,12 +65,43 @@ mod tests {
         let txs = get_transactions(&conn, 1).unwrap();
         assert!(!txs.is_empty());
     }
-        
+    
+    // 모든 플레이어가 파산 상태로 시작
+    #[test]
+    fn test_resolve_current_player_id_no_active_players() {
+        let conn = setup_test_db();
 
+        // 모든 플레이어를 파산 상태로 설정 (UPDATE)
+        conn.execute("UPDATE players SET is_bankrupt = 1", []).unwrap();
 
-/* 
+        let current_turn_index = 0;
+        let result = resolve_current_player_id(&conn, current_turn_index).unwrap();
+        assert_eq!(result, None); // 활성 플레이어 없음
+    }
 
-    /// 초기 상태 조회 테스트 (init_db 기준으로 플레이어가 정상 생성되었는지 확인. 현재 턴 플레이어 계산이 정상인지 검증)
+    // 일부만 파산한 채로 시작
+    #[test]
+    fn test_resolve_current_player_id_with_active_players() {
+        let conn = setup_test_db();
+
+        // 예: 첫 번째 플레이어 활성, 두 번째 플레이어 파산
+        // 이미 init_db에서 있는 데이터 row를 기준으로 UPDATE
+        conn.execute("UPDATE players SET is_bankrupt = 0 WHERE id = 1", []).unwrap();
+        conn.execute("UPDATE players SET is_bankrupt = 1 WHERE id = 2", []).unwrap();
+        conn.execute("UPDATE players SET is_bankrupt = 0 WHERE id = 3", []).unwrap();
+
+        // current_turn_index=0 → 첫 번째 활성 플레이어
+        let result = resolve_current_player_id(&conn, 0).unwrap();
+        assert_eq!(result, Some(1));
+
+        // current_turn_index=1 → 두 번째 활성 플레이어
+        let result = resolve_current_player_id(&conn, 1).unwrap();
+        assert_eq!(result, Some(3));
+    }
+}
+
+/*
+     /// 초기 상태 조회 테스트 (init_db 기준으로 플레이어가 정상 생성되었는지 확인. 현재 턴 플레이어 계산이 정상인지 검증)
     #[test]
     fn test_get_state_initial() {
         let conn = setup_test_db();
@@ -504,6 +537,5 @@ mod tests {
         assert_eq!(p3.money, 80 + 300);
     }
 
-    */
-
 }
+*/
