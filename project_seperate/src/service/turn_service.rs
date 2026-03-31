@@ -8,6 +8,7 @@ use crate::service::{
     movement_service::move_player,
     salary_service::calculate_salary,
     buy_property_service::{decide_buy_property, BuyResult},
+    traits::PlayerStateRepo,
     roll_dice_service::roll_dice,
     event_service::{handle_event, EventResult},
     game_end_service::Player as GamePlayer,
@@ -181,13 +182,20 @@ pub fn get_active_game_players(conn: &Connection) -> rusqlite::Result<Vec<GamePl
         .collect())
 }
 
-/// 현재 턴 인덱스를 기반으로 실제 턴을 진행할 플레이어의 ID를 반환한다.
-///
-/// DB에서 플레이어 상태를 조회한 뒤, 활성(비파산) 플레이어 수로
-/// 인덱스를 정규화하여 해당 플레이어 ID를 계산한다.
-/// 활성 플레이어가 없으면 `None`을 반환한다.
-pub fn resolve_current_player_id(conn: &Connection, current_turn_index: usize) -> rusqlite::Result<Option<i32>> {
-    let players = get_player_states(conn)?;
+struct PlayerStateRepoImpl;
+
+impl PlayerStateRepo for PlayerStateRepoImpl {
+    fn get_player_states(&self, conn: &Connection) -> rusqlite::Result<Vec<PlayerState>> {
+        get_player_states(conn)
+    }
+}
+
+pub fn resolve_current_player_id_with_repo<R: PlayerStateRepo>(
+    repo: &R,
+    conn: &Connection,
+    current_turn_index: usize,
+) -> rusqlite::Result<Option<i32>> {
+    let players = repo.get_player_states(conn)?;
     let active: Vec<&PlayerState> = players.iter().filter(|p| !p.is_bankrupt).collect();
 
     if active.is_empty() {
@@ -196,6 +204,15 @@ pub fn resolve_current_player_id(conn: &Connection, current_turn_index: usize) -
 
     let normalized = current_turn_index % active.len();
     Ok(Some(active[normalized].id))
+}
+
+/// 현재 턴 인덱스를 기반으로 실제 턴을 진행할 플레이어의 ID를 반환한다.
+///
+/// DB에서 플레이어 상태를 조회한 뒤, 활성(비파산) 플레이어 수로
+/// 인덱스를 정규화하여 해당 플레이어 ID를 계산한다.
+/// 활성 플레이어가 없으면 `None`을 반환한다.
+pub fn resolve_current_player_id(conn: &Connection, current_turn_index: usize) -> rusqlite::Result<Option<i32>> {
+    resolve_current_player_id_with_repo(&PlayerStateRepoImpl, conn, current_turn_index)
 }
 
 // 턴 동안 발생한 행동 종류

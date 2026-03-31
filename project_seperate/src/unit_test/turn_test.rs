@@ -4,9 +4,11 @@ mod tests {
     use crate::service::event_service::EventResult;
     use crate::service::turn_service::{
         build_turn_result_with_deps, roll_and_move_with_deps,
+        resolve_current_player_id_with_repo,
         MoveStep, TurnAction,
     };
-    use crate::service::traits::TurnServiceDeps;
+    use crate::service::traits::{TurnServiceDeps, PlayerStateRepo};
+    use crate::repository::player_repo::PlayerState;
 
     // ── Mock ──────────────────────────────────────────────
     struct MockDeps {
@@ -216,5 +218,66 @@ mod tests {
         assert_eq!(result.new_position, 7);
         assert_eq!(result.new_lap, 1);
         assert_eq!(result.salary, 20);
+    }
+
+    // ── resolve_current_player_id Mock ────────────────────
+    struct MockPlayerStateRepo {
+        players: Vec<PlayerState>,
+    }
+
+    impl PlayerStateRepo for MockPlayerStateRepo {
+        fn get_player_states(&self, _conn: &Connection) -> rusqlite::Result<Vec<PlayerState>> {
+            Ok(self.players.clone())
+        }
+    }
+
+    fn make_player(id: i32, is_bankrupt: bool) -> PlayerState {
+        PlayerState {
+            id,
+            name: format!("p{}", id),
+            position: 0,
+            money: 100,
+            lap: 0,
+            turn_order: id,
+            is_bankrupt,
+        }
+    }
+
+    // ── resolve_current_player_id_with_repo ───────────────
+    #[test]
+    fn resolve_player_id_no_active_players() {
+        let repo = MockPlayerStateRepo {
+            players: vec![make_player(1, true), make_player(2, true)],
+        };
+        let result = resolve_current_player_id_with_repo(&repo, &dummy_conn(), 0).unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn resolve_player_id_returns_correct_player() {
+        let repo = MockPlayerStateRepo {
+            players: vec![make_player(1, false), make_player(2, false), make_player(3, false)],
+        };
+        assert_eq!(resolve_current_player_id_with_repo(&repo, &dummy_conn(), 0).unwrap(), Some(1));
+        assert_eq!(resolve_current_player_id_with_repo(&repo, &dummy_conn(), 1).unwrap(), Some(2));
+        assert_eq!(resolve_current_player_id_with_repo(&repo, &dummy_conn(), 2).unwrap(), Some(3));
+    }
+
+    #[test]
+    fn resolve_player_id_wraps_index() {
+        let repo = MockPlayerStateRepo {
+            players: vec![make_player(1, false), make_player(2, false)],
+        };
+        assert_eq!(resolve_current_player_id_with_repo(&repo, &dummy_conn(), 2).unwrap(), Some(1));
+        assert_eq!(resolve_current_player_id_with_repo(&repo, &dummy_conn(), 3).unwrap(), Some(2));
+    }
+
+    #[test]
+    fn resolve_player_id_skips_bankrupt() {
+        let repo = MockPlayerStateRepo {
+            players: vec![make_player(1, true), make_player(2, false), make_player(3, false)],
+        };
+        assert_eq!(resolve_current_player_id_with_repo(&repo, &dummy_conn(), 0).unwrap(), Some(2));
+        assert_eq!(resolve_current_player_id_with_repo(&repo, &dummy_conn(), 1).unwrap(), Some(3));
     }
 }

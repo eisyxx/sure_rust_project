@@ -13,6 +13,10 @@ pub trait TurnServiceDeps {
     fn handle_event(&self, conn: &Connection, player_id: i32, tile_id: i32) -> EventResult;
 }
 
+pub trait PlayerStateRepo {
+    fn get_player_states(&self, conn: &Connection) -> rusqlite::Result<Vec<crate::repository::player_repo::PlayerState>>;
+}
+
 pub trait TurnExecuteRepo {
     fn update_position_and_lap(&self, conn: &Connection, player_id: i32, pos: i32, lap: i32) -> rusqlite::Result<()>;
     fn update_money(&self, conn: &Connection, player_id: i32, delta: i32) -> rusqlite::Result<()>;
