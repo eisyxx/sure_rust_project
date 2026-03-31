@@ -11,7 +11,7 @@ tile_type == "start" → Skip
 
 #[cfg(test)]
 mod tests {
-    use crate::service::buy_property_service::{decide_buy_property, BuyResult};
+    use crate::service::buy_property_service::{decide_buy_property, is_purchasable_tile, BuyResult};
 
     #[test]
     fn test_pay_toll() {
@@ -84,5 +84,32 @@ mod tests {
         let result = decide_buy_property(1, 100, 50, 10, None, true, "start".to_string());
 
         assert!(matches!(result, BuyResult::Skip));
+    }
+
+    // --- is_purchasable_tile tests ---
+
+    #[test]
+    fn test_purchasable_tile_true() {
+        assert!(is_purchasable_tile(None, "land", 50));
+    }
+
+    #[test]
+    fn test_purchasable_tile_has_owner() {
+        assert!(!is_purchasable_tile(Some(1), "land", 50));
+    }
+
+    #[test]
+    fn test_purchasable_tile_event() {
+        assert!(!is_purchasable_tile(None, "event", 50));
+    }
+
+    #[test]
+    fn test_purchasable_tile_start() {
+        assert!(!is_purchasable_tile(None, "start", 50));
+    }
+
+    #[test]
+    fn test_purchasable_tile_zero_price() {
+        assert!(!is_purchasable_tile(None, "land", 0));
     }
 }
