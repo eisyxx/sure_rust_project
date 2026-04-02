@@ -400,10 +400,10 @@ function arrangeMarkersInCell(row, col) {
 
   const markers = cell.querySelectorAll(".player-marker");
   const fixedPositions = {
-    1: { x: -15, y: -15 }, // 좌상
-    2: { x: 15, y: -15 },  // 우상
-    3: { x: -15, y: 15 },  // 좌하
-    4: { x: 15, y: 15 },   // 우하
+    1: { x: -12, y: -12 }, // 좌상
+    2: { x: 12, y: -12 },  // 우상
+    3: { x: -12, y: 12 },  // 좌하
+    4: { x: 12, y: 12 },   // 우하
   };
 
   markers.forEach((marker) => {

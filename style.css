@@ -217,3 +217,113 @@ body {
   padding: 8px 16px;
   cursor: pointer;
 }
+
+/* ============================
+   모바일 반응형 (max-width: 1000px)
+   ============================ */
+@media (max-width: 1000px) {
+  /* 전체 레이아웃: 세로 방향 */
+  .container {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  /* side-panel을 풀어서 자식들이 container의 flex item이 되도록 */
+  .side-panel {
+    display: contents;
+  }
+
+  /* 상단 정보: 보드 위로 이동, 양쪽 정렬 + 중앙 여백 */
+  .top-info {
+    order: -1;
+    justify-content: space-between;
+    padding: 10px 40px;
+  }
+
+  /* 보드 영역 */
+  .board-section {
+    flex: none;
+    order: 0;
+    padding: 10px 10px;
+  }
+
+  /* 보드: 타일 크기 축소 */
+  .board {
+    grid-template-columns: repeat(7, 60px);
+    grid-template-rows: repeat(7, 60px);
+  }
+
+  /* 로고 축소 */
+  .game-logo {
+    width: 200px;
+  }
+
+  /* 플레이어 마커 축소 */
+  .player-marker {
+    width: 25px;
+    height: 25px;
+  }
+
+  /* 플레이어 리스트 */
+  .player-list {
+    order: 1;
+    margin: 24px 0;
+    gap: 4px;
+  }
+
+  .player {
+    font-size: 22px;
+  }
+
+  .player-icon {
+    width: 50px;
+    height: 56px;
+  }
+
+  /* 컨트롤 */
+  .controls {
+    order: 2;
+    text-align: center;
+    padding: 0 16px 20px;
+  }
+
+  /* 주사위 */
+  .dice {
+    font-size: 42px;
+    margin: 10px 0;
+  }
+
+  /* 하단 버튼: 고정 크기 */
+  .action-buttons {
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .action-buttons button {
+    flex: none;
+    width: 150px;
+    height: 40px;
+    font-size: 16px;
+  }
+
+  #rollBtn {
+    width: 150px;
+    height: 40px;
+    padding: 0;
+    font-size: 16px;
+  }
+
+  /* 팝업 */
+  .modal-content {
+    width: 95vw;
+    max-height: 80vh;
+    padding: 12px;
+  }
+
+  .transaction-table th,
+  .transaction-table td {
+    padding: 4px;
+    font-size: 12px;
+  }
+}
