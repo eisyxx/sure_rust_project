@@ -1,7 +1,13 @@
 #[cfg(test)]
+    
+mod integration_case_tests {
+    use rusqlite::Connection;
+    use project::service::orchestrator::*;
+    use project::service::event_service::{handle_event, EventResult};
+    use project::service::traits::TurnServiceDeps;
 
-#[derive(Debug)]
-    struct ExpectedTurnResult {
+    #[derive(Debug)]
+    struct ExpectedTurnOutcome {
         player_id: i32,
         dice: i32,
         old_position: i32,
@@ -16,8 +22,26 @@
         game_finished: bool,
         winner_id: Option<i32>,
     }
-    
-    fn assert_turn_result(result: &TurnResult, expected: ExpectedTurnResult) {
+    struct MockDeps {
+        dice: i32,
+    }
+
+    impl TurnServiceDeps for MockDeps {
+        fn roll_dice(&self) -> i32 {
+            self.dice
+        }
+        fn handle_event(&self, conn: &Connection, player_id: i32, tile_id: i32,) -> EventResult {
+            EventResult::None
+        }
+    }
+
+    // 인메모리 DB 생성 및 초기화
+    fn setup() -> (Connection, SessionState) {
+        let conn = Connection::open_in_memory().unwrap();
+        let session = init_session(&conn).unwrap();
+        (conn, session)
+    }
+    fn assert_turn_result(result: &TurnOutcome, expected: ExpectedTurnOutcome) {
         assert_eq!(result.player_id, expected.player_id);
         assert_eq!(result.dice, expected.dice);
         assert_eq!(result.old_position, expected.old_position);
@@ -32,32 +56,6 @@
         assert_eq!(result.game_finished, expected.game_finished);
         assert_eq!(result.winner_id, expected.winner_id);
     }
-    
-mod integration_tests {
-    use rusqlite::Connection;
-    use project::service::orchestrator::*;
-    use project::service::event_service::{handle_event, EventResult};
-    use project::service::traits::TurnServiceDeps;
-
-    struct MockDeps {
-        dice: i32,
-    }
-
-    impl TurnServiceDeps for MockDeps {
-        fn roll_dice(&self) -> i32 {
-            self.dice
-        }
-        fn handle_event(&self, conn: &Connection, player_id: i32, tile_id: i32,) -> EventResult {
-            EventResult::None
-        }
-    }
-
-
-    fn setup() -> (Connection, SessionState) {
-        let conn = Connection::open_in_memory().unwrap();
-        let session = init_session(&conn).unwrap();
-        (conn, session)
-    }
 
    #[test]
     fn trans_no_owner_001_full_flow() {
@@ -68,17 +66,11 @@ mod integration_tests {
             [],
         ).unwrap();
 
-        conn.execute(
-            "UPDATE tiles SET owner_id=NULL WHERE id=5",
-            [],
-        ).unwrap();
-
-        session.current_turn_index = 1;
-
-        set_will_buy(true);
+        session.current_turn_index = 4;
 
         let repo = TurnRepoImpl;
 
+        // process_turn_with_repo 호출 (can_buy 상태까지 진행)
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { dice: 3 },
@@ -86,7 +78,15 @@ mod integration_tests {
             &mut session,
         ).unwrap();
 
-        assert_turn_result(&result, ExpectedTurnResult {
+        // 구매 가능한 상태라면 process_decide 호출
+        let final_result = if result.action_type == "can_buy" {
+            process_decide(&conn, &mut session, true).unwrap()
+        } else {
+            result
+        };
+
+        // 결과 검증
+        assert_turn_result(&final_result, ExpectedTurnOutcome {
             player_id: 1,
             dice: 3,
             old_position: 2,
@@ -104,14 +104,13 @@ mod integration_tests {
 
         // DB 검증
         let owner: Option<i32> = conn.query_row(
-            "SELECT owner_id FROM tiles WHERE id=5",
+            "SELECT owner_id FROM properties WHERE tile_id=5",
             [],
             |r| r.get(0),
         ).unwrap();
 
         assert_eq!(owner, Some(1));
     }
-
 
 
 }
