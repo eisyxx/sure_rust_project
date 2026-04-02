@@ -1,3 +1,5 @@
+#![coverage(off)]
+
 mod buy_property_test;
 mod common_db;
 mod event_test;
