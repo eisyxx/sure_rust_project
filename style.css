@@ -1,3 +1,7 @@
+:root {
+  --marker-offset: 15px;
+}
+
 body {
   margin: 0;
   font-family: Arial, sans-serif;
@@ -260,6 +264,10 @@ body {
   }
 
   /* 플레이어 마커 축소 */
+  :root {
+    --marker-offset: 11px;
+  }
+
   .player-marker {
     width: 25px;
     height: 25px;
