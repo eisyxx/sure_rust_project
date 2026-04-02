@@ -41,6 +41,7 @@ mod integration_case_tests {
         let session = init_session(&conn).unwrap();
         (conn, session)
     }
+    // TurnOutcome 검증 함수
     fn assert_turn_result(result: &TurnOutcome, expected: ExpectedTurnOutcome) {
         assert_eq!(result.player_id, expected.player_id);
         assert_eq!(result.dice, expected.dice);
@@ -58,7 +59,7 @@ mod integration_case_tests {
     }
 
    #[test]
-    fn trans_no_owner_001_full_flow() {
+    fn trans_no_owner_001_test() {
         let (conn, mut session) = setup();
 
         conn.execute(
