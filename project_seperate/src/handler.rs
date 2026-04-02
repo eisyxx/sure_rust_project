@@ -1,5 +1,3 @@
-#![coverage(off)]
-
 //! # 턴 핸들러 (Turn Handler)
 //!
 //! 6개의 HTTP 엔드포인트 함수 + DTO 조립을 담당.

@@ -1,5 +1,3 @@
-#![feature(coverage_attribute)]
-
 use rusqlite::Connection;
 use std::sync::Mutex;
 
