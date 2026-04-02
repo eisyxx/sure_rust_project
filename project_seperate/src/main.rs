@@ -1,6 +1,3 @@
-#![feature(coverage_attribute)]
-#![coverage(off)]
-
 use actix_files::{Files, NamedFile};
 use actix_web::{get, web, App, HttpServer};
 use rusqlite::Connection;

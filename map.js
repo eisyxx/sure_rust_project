@@ -399,11 +399,12 @@ function arrangeMarkersInCell(row, col) {
   }
 
   const markers = cell.querySelectorAll(".player-marker");
+  const offset = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--marker-offset')) || 15;
   const fixedPositions = {
-    1: { x: -15, y: -15 }, // 좌상
-    2: { x: 15, y: -15 },  // 우상
-    3: { x: -15, y: 15 },  // 좌하
-    4: { x: 15, y: 15 },   // 우하
+    1: { x: -offset, y: -offset }, // 좌상
+    2: { x: offset, y: -offset },  // 우상
+    3: { x: -offset, y: offset },  // 좌하
+    4: { x: offset, y: offset },   // 우하
   };
 
   markers.forEach((marker) => {

@@ -1,5 +1,3 @@
-#![coverage(off)]
-
 #[cfg(test)]
 mod integration_tests {
     use rusqlite::Connection;
@@ -221,7 +219,7 @@ mod integration_tests {
             "none",
         ];
 
-        assert!(valid_actions.contains(&result.action_type.as_str()));
+        assert!(valid_actions.contains(&&*result.action_type));
 
         // can_buy면 decide까지 포함해서 한 턴 완성
         if result.action_type == "can_buy" {
@@ -232,7 +230,7 @@ mod integration_tests {
                 "skip",
             ];
 
-            assert!(valid_after_decide.contains(&result2.action_type.as_str()));
+            assert!(valid_after_decide.contains(&&*result2.action_type));
         }
 
         // 상태 검증
