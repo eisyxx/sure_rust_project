@@ -221,7 +221,7 @@ mod integration_tests {
             "none",
         ];
 
-        assert!(valid_actions.contains(&result.action_type.as_str()));
+        assert!(valid_actions.contains(&result.action_type));
 
         // can_buy면 decide까지 포함해서 한 턴 완성
         if result.action_type == "can_buy" {
@@ -232,7 +232,7 @@ mod integration_tests {
                 "skip",
             ];
 
-            assert!(valid_after_decide.contains(&result2.action_type.as_str()));
+            assert!(valid_after_decide.contains(&result2.action_type));
         }
 
         // 상태 검증
@@ -258,6 +258,50 @@ mod integration_tests {
             assert!(player_ids.contains(&prop.owner_id));
         }
         
+    }
+
+    // 거래 내역 조회 테스트
+    #[test]
+    fn test_get_transactions_by_player() {
+        use crate::service::orchestrator;
+        use crate::repository::init::init_db;
+        use crate::repository::transcaction_repo::record_transaction;
+
+        let conn = Connection::open_in_memory().unwrap();
+
+        // DB 초기화 (여기서 초기자금 transaction 생성됨)
+        init_db::init_db(&conn).unwrap();
+
+        let player_id = 1;
+
+        record_transaction(&conn, player_id, "deposit", 1000, "salary").unwrap();
+        record_transaction(&conn, player_id, "withdraw", 200, "tile1_purchase").unwrap();
+
+        let txs = orchestrator::get_transactions(&conn, player_id).unwrap();
+
+        // 전체 개수 검증 (초기자금 포함)
+        assert_eq!(txs.len(), 3);
+
+        // 초기자금 검증
+        assert!(txs.iter().any(|tx| 
+            tx.tx_type == "deposit" &&
+            tx.amount == 300 &&
+            tx.target == "초기자금"
+        ));
+
+        // 월급 검증
+        assert!(txs.iter().any(|tx| 
+            tx.tx_type == "deposit" &&
+            tx.amount == 1000 &&
+            tx.target == "salary"
+        ));
+
+        // 구매 검증
+        assert!(txs.iter().any(|tx| 
+            tx.tx_type == "withdraw" &&
+            tx.amount == 200 &&
+            tx.target.contains("tile")
+        ));
     }
 
     
