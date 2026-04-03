@@ -68,12 +68,15 @@ mod fuzz_tests {
             // 랜덤 상태 주입
             seed_random_state(&conn, money, position);
 
+
+/* 디버깅용
             let (pos, money_db): (i32, i32) = conn.query_row(
                 "SELECT position, money FROM players WHERE id=1",
                 [],
                 |r| Ok((r.get(0)?, r.get(1)?)),
             ).unwrap();
-            println!("[DB AFTER SEED] pos={}, money={}", pos, money_db); //디버깅용
+            println!("[DB AFTER SEED] pos={}, money={}", pos, money_db);
+*/
 
             session.current_turn_index = 0;
 
@@ -106,12 +109,14 @@ mod fuzz_tests {
                 result
             };
 
+/* 디버깅용
             println!(
                 "[FINAL RESULT] action={}, pos={}, lap={}",
                 final_result.action_type,
                 final_result.new_position,
                 final_result.new_lap
-            ); //디버깅용
+            ); 
+*/
 
             // ━━━━━━━━━━━━━━━━━━━━━━━
             // Invariant 검증

@@ -16,6 +16,7 @@ use crate::service::{
 };
 
 // 한 턴 진행 결과 데이터
+#[derive(Clone, Debug)]
 pub struct TurnResult {
     pub dice: i32,
     pub new_position: i32,
@@ -208,7 +209,7 @@ pub fn resolve_current_player_id(conn: &Connection, current_turn_index: usize) -
 }
 
 // 턴 동안 발생한 행동 종류
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TurnAction {
     None,
     PayToll { owner_id: i32, amount: i32 },
