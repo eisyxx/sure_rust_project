@@ -103,7 +103,6 @@ pub fn build_turn_result_with_deps<D: TurnServiceDeps>(
     tile_price: i32,
     tile_toll: i32,
     tile_owner: Option<i32>,
-    will_buy: bool,
     tile_type: &str,
 ) -> TurnResult {
     let action = if tile_type == "event" {
@@ -124,14 +123,13 @@ pub fn build_turn_result_with_deps<D: TurnServiceDeps>(
             tile_price,
             tile_toll,
             tile_owner,
-            will_buy,
+            false,
             tile_type.to_string(),
         );
         match buy_result {
             BuyResult::PayToll { owner_id, amount } => TurnAction::PayToll { owner_id, amount },
             BuyResult::Bankrupt { owner_id, paid } => TurnAction::Bankrupt { owner_id, paid },
-            BuyResult::Purchase { price } => TurnAction::Purchase { price },
-            BuyResult::NotEnoughMoney | BuyResult::Skip => TurnAction::None,
+            BuyResult::Purchase { .. } | BuyResult::NotEnoughMoney | BuyResult::Skip => TurnAction::None,
         }
     };
 
@@ -144,7 +142,7 @@ pub fn build_turn_result_with_deps<D: TurnServiceDeps>(
     }
 }
 
-/// MoveStep + 구매 여부로 TurnResult 생성 (통행료/구매/이벤트/None 처리)
+/// MoveStep → TurnResult 생성 (통행료/이벤트/None 처리, 구매는 process_decide 경로)
 pub fn build_turn_result(
     conn: &Connection,
     move_step: MoveStep,
@@ -153,12 +151,11 @@ pub fn build_turn_result(
     tile_price: i32,
     tile_toll: i32,
     tile_owner: Option<i32>,
-    will_buy: bool,
     tile_type: &str,
 ) -> TurnResult {
     build_turn_result_with_deps(
         &TurnServiceDepsImpl, conn, move_step, player_id,
-        money_after_salary, tile_price, tile_toll, tile_owner, will_buy, tile_type,
+        money_after_salary, tile_price, tile_toll, tile_owner, tile_type,
     )
 }
 
@@ -220,7 +217,6 @@ pub fn resolve_current_player_id(conn: &Connection, current_turn_index: usize) -
 pub enum TurnAction {
     None,
     PayToll { owner_id: i32, amount: i32 },
-    Purchase { price: i32 },
     Bankrupt { owner_id: i32, paid: i32 },
     EventWelfareFund { amount: i32 },
     EventWelfareFundBankrupt { paid: i32 },

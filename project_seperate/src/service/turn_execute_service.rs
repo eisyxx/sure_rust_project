@@ -21,9 +21,6 @@ impl TurnExecuteRepo for TurnExecuteRepoImpl {
     fn record_transaction(&self, conn: &Connection, player_id: i32, tx_type: &str, amount: i32, target: &str) -> rusqlite::Result<()> {
         record_transaction(conn, player_id, tx_type, amount, target)
     }
-    fn set_owner(&self, conn: &Connection, tile_id: i32, player_id: i32, price: i32) -> rusqlite::Result<()> {
-        set_owner(conn, tile_id, player_id, price)
-    }
     fn reset_owner_for_player(&self, conn: &Connection, player_id: i32) -> rusqlite::Result<()> {
         reset_owner_for_player(conn, player_id)
     }
@@ -71,26 +68,6 @@ pub fn apply_turn_result_with_repo<R: TurnExecuteRepo>(
 
     // 액션 처리
     match &result.action {
-
-        // 토지 구매
-        TurnAction::Purchase { price } => {
-            repo.update_money(conn, player_id, -*price)?;
-
-            repo.record_transaction(
-                conn,
-                player_id,
-                "withdraw",
-                *price,
-                &format!("tile{}_purchase", result.new_position),
-            )?;
-
-            repo.set_owner(
-                conn,
-                result.new_position,
-                player_id,
-                *price,
-            )?;
-        }
 
         // 통행료 지급
         TurnAction::PayToll { owner_id, amount } => {
