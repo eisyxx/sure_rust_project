@@ -1,5 +1,6 @@
 use rusqlite::Connection;
 
+#[allow(dead_code)]
 pub fn setup_db() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
 

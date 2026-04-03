@@ -2,8 +2,7 @@
 mod integration_tests {
     use rusqlite::Connection;
 
-    use project::service::event_service::{handle_event, EventResult};
-    use project::service::turn_service::resolve_current_player_id;
+    use project::service::event_service::EventResult;
 
     use project::service::orchestrator::*;
     use project::service::traits::TurnServiceDeps;
@@ -16,6 +15,7 @@ mod integration_tests {
         (conn, session)
     }
 
+    #[allow(dead_code)]
     struct MockDeps {
         dice: i32,
     }
@@ -24,7 +24,7 @@ mod integration_tests {
         fn roll_dice(&self) -> i32 {
             self.dice
         }
-        fn handle_event(&self, conn: &Connection, player_id: i32, tile_id: i32,) -> EventResult {
+        fn handle_event(&self, _conn: &Connection, _player_id: i32, _tile_id: i32,) -> EventResult {
             EventResult::None
         }
     }
@@ -198,7 +198,7 @@ mod integration_tests {
         use project::repository::transcaction_repo::record_transaction;
 
         // DB 초기화 (여기서 초기자금 transaction 생성됨)
-        let (conn, mut session) = setup();
+        let (conn, _session) = setup();
 
         let player_id = 1;
 

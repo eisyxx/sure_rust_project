@@ -3,7 +3,7 @@
 mod integration_case_tests {
     use rusqlite::Connection;
     use project::service::orchestrator::*;
-    use project::service::event_service::{handle_event, EventResult};
+    use project::service::event_service::EventResult;
     use project::service::traits::TurnServiceDeps;
 
     #[derive(Debug)]
@@ -30,7 +30,7 @@ mod integration_case_tests {
         fn roll_dice(&self) -> i32 {
             self.dice
         }
-        fn handle_event(&self, conn: &Connection, player_id: i32, tile_id: i32,) -> EventResult {
+        fn handle_event(&self, _conn: &Connection, _player_id: i32, _tile_id: i32,) -> EventResult {
             EventResult::None
         }
     }

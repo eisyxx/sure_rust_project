@@ -13,7 +13,7 @@ use crate::service::buy_property_service::{is_purchasable_tile, decide_buy_prope
 use crate::service::game_end_service::{evaluate_and_apply_game_end, Player as GamePlayer};
 use crate::service::turn_execute_service::{apply_turn_result, pre_apply_move_salary, apply_purchase};
 use crate::service::turn_service::{
-    build_landing_context, build_turn_result, roll_and_move, get_active_game_players,
+    build_landing_context, build_turn_result, get_active_game_players,
     resolve_current_player_id, TurnAction, TurnServiceDepsImpl,roll_and_move_with_deps, TurnResult,
 };
 use crate::repository::init::init_db;
