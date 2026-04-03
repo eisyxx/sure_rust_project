@@ -69,11 +69,6 @@ pub fn roll_and_move_with_deps<D: TurnServiceDeps>(
     }
 }
 
-/// 주사위 굴리기 + 이동 + 월급 계산 수행 (구매 결정 제외)
-pub fn roll_and_move(position: i32, lap: i32, total_tiles: i32) -> MoveStep {
-    roll_and_move_with_deps(&TurnServiceDepsImpl, position, lap, total_tiles)
-}
-
 /// 도착 타일 정보와 소유자 조회 + 월급 반영 후 잔액 계산을 한 번에 수행한다.
 pub fn build_landing_context(
     conn: &Connection,
