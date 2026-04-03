@@ -1,8 +1,5 @@
-/// turn_execute_service의 set_owner 실행 안됨 코드 확인 필요
-/// turn_execute_service의 match 액션 처리 -> purchase 부분 실행 안됨 -> orchestraor 문제와 연결되는 것으로 추정
 /// turn_service의 roll_and_move 실행 안됨
 /// turn_service의 match deps.handle_event -> EventResult::None => TurnAction::None 실행 안됨
-/// turn_service의 match buy_result -> BuyResult::Purchase { price } => TurnAction::Purchase { price } 실행 x (orchestraor 문제와 연결되는 것으로 추정)
 /// 
 
 

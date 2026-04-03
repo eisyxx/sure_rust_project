@@ -70,7 +70,7 @@ mod tests {
         let deps = MockDeps { dice: 0, event_result: EventResult::WelfareFund { amount: 50 } };
         let result = build_turn_result_with_deps(
             &deps, &dummy_conn(), make_move_step(3, 5, 0, 0),
-            1, 100, 0, 0, None, false, "event",
+            1, 100, 0, 0, None, "event",
         );
         assert_eq!(result.action, TurnAction::EventWelfareFund { amount: 50 });
     }
@@ -80,7 +80,7 @@ mod tests {
         let deps = MockDeps { dice: 0, event_result: EventResult::WelfareFundBankrupt { paid: 30 } };
         let result = build_turn_result_with_deps(
             &deps, &dummy_conn(), make_move_step(3, 5, 0, 0),
-            1, 30, 0, 0, None, false, "event",
+            1, 30, 0, 0, None, "event",
         );
         assert_eq!(result.action, TurnAction::EventWelfareFundBankrupt { paid: 30 });
     }
@@ -90,7 +90,7 @@ mod tests {
         let deps = MockDeps { dice: 0, event_result: EventResult::EstateTax { amount: 40 } };
         let result = build_turn_result_with_deps(
             &deps, &dummy_conn(), make_move_step(3, 5, 0, 0),
-            1, 200, 0, 0, None, false, "event",
+            1, 200, 0, 0, None, "event",
         );
         assert_eq!(result.action, TurnAction::EstateTax { amount: 40 });
     }
@@ -100,7 +100,7 @@ mod tests {
         let deps = MockDeps { dice: 0, event_result: EventResult::EstateTaxBankrupt { paid: 20 } };
         let result = build_turn_result_with_deps(
             &deps, &dummy_conn(), make_move_step(3, 5, 0, 0),
-            1, 20, 0, 0, None, false, "event",
+            1, 20, 0, 0, None, "event",
         );
         assert_eq!(result.action, TurnAction::EstateTaxBankrupt { paid: 20 });
     }
@@ -110,7 +110,7 @@ mod tests {
         let deps = MockDeps { dice: 0, event_result: EventResult::EstateTaxSkipped };
         let result = build_turn_result_with_deps(
             &deps, &dummy_conn(), make_move_step(3, 5, 0, 0),
-            1, 200, 0, 0, None, false, "event",
+            1, 200, 0, 0, None, "event",
         );
         assert_eq!(result.action, TurnAction::EstateTaxSkipped);
     }
@@ -120,7 +120,7 @@ mod tests {
         let deps = MockDeps { dice: 0, event_result: EventResult::FundReceive { amount: 300 } };
         let result = build_turn_result_with_deps(
             &deps, &dummy_conn(), make_move_step(3, 5, 0, 0),
-            1, 100, 0, 0, None, false, "event",
+            1, 100, 0, 0, None, "event",
         );
         assert_eq!(result.action, TurnAction::EventFundReceive { amount: 300 });
     }
@@ -130,7 +130,7 @@ mod tests {
         let deps = MockDeps { dice: 0, event_result: EventResult::FundReceiveEmpty };
         let result = build_turn_result_with_deps(
             &deps, &dummy_conn(), make_move_step(3, 5, 0, 0),
-            1, 100, 0, 0, None, false, "event",
+            1, 100, 0, 0, None, "event",
         );
         assert_eq!(result.action, TurnAction::FundReceiveEmpty);
     }
@@ -140,20 +140,20 @@ mod tests {
         let deps = MockDeps { dice: 0, event_result: EventResult::None };
         let result = build_turn_result_with_deps(
             &deps, &dummy_conn(), make_move_step(3, 5, 0, 0),
-            1, 100, 0, 0, None, false, "event",
+            1, 100, 0, 0, None, "event",
         );
         assert_eq!(result.action, TurnAction::None);
     }
 
     // ── build_turn_result_with_deps: 일반 타일 (buy_property) ──
     #[test]
-    fn land_purchase() {
+    fn land_no_owner_skips() {
         let deps = MockDeps { dice: 0, event_result: EventResult::None };
         let result = build_turn_result_with_deps(
             &deps, &dummy_conn(), make_move_step(3, 1, 0, 0),
-            1, 100, 50, 10, None, true, "land",
+            1, 100, 50, 10, None, "land",
         );
-        assert_eq!(result.action, TurnAction::Purchase { price: 50 });
+        assert_eq!(result.action, TurnAction::None);
     }
 
     #[test]
@@ -161,7 +161,7 @@ mod tests {
         let deps = MockDeps { dice: 0, event_result: EventResult::None };
         let result = build_turn_result_with_deps(
             &deps, &dummy_conn(), make_move_step(3, 1, 0, 0),
-            1, 100, 50, 10, Some(2), false, "land",
+            1, 100, 50, 10, Some(2), "land",
         );
         assert_eq!(result.action, TurnAction::PayToll { owner_id: 2, amount: 10 });
     }
@@ -171,7 +171,7 @@ mod tests {
         let deps = MockDeps { dice: 0, event_result: EventResult::None };
         let result = build_turn_result_with_deps(
             &deps, &dummy_conn(), make_move_step(3, 1, 0, 0),
-            1, 5, 50, 10, Some(2), false, "land",
+            1, 5, 50, 10, Some(2), "land",
         );
         assert_eq!(result.action, TurnAction::Bankrupt { owner_id: 2, paid: 5 });
     }
@@ -181,17 +181,7 @@ mod tests {
         let deps = MockDeps { dice: 0, event_result: EventResult::None };
         let result = build_turn_result_with_deps(
             &deps, &dummy_conn(), make_move_step(3, 1, 0, 0),
-            1, 10, 50, 10, None, true, "land",
-        );
-        assert_eq!(result.action, TurnAction::None);
-    }
-
-    #[test]
-    fn land_skip_no_buy() {
-        let deps = MockDeps { dice: 0, event_result: EventResult::None };
-        let result = build_turn_result_with_deps(
-            &deps, &dummy_conn(), make_move_step(3, 1, 0, 0),
-            1, 100, 50, 10, None, false, "land",
+            1, 10, 50, 10, None, "land",
         );
         assert_eq!(result.action, TurnAction::None);
     }
@@ -201,7 +191,7 @@ mod tests {
         let deps = MockDeps { dice: 0, event_result: EventResult::None };
         let result = build_turn_result_with_deps(
             &deps, &dummy_conn(), make_move_step(3, 0, 0, 0),
-            1, 100, 0, 0, None, false, "start",
+            1, 100, 0, 0, None, "start",
         );
         assert_eq!(result.action, TurnAction::None);
     }
@@ -212,7 +202,7 @@ mod tests {
         let deps = MockDeps { dice: 0, event_result: EventResult::None };
         let result = build_turn_result_with_deps(
             &deps, &dummy_conn(), make_move_step(4, 7, 1, 20),
-            1, 120, 0, 0, None, false, "start",
+            1, 120, 0, 0, None, "start",
         );
         assert_eq!(result.dice, 4);
         assert_eq!(result.new_position, 7);

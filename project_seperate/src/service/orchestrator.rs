@@ -14,7 +14,7 @@ use crate::service::game_end_service::{evaluate_and_apply_game_end, Player as Ga
 use crate::service::turn_execute_service::{apply_turn_result, pre_apply_move_salary, apply_purchase};
 use crate::service::turn_service::{
     build_landing_context, build_turn_result, get_active_game_players,
-    resolve_current_player_id, TurnAction, TurnServiceDepsImpl,roll_and_move_with_deps, TurnResult,
+    resolve_current_player_id, TurnAction, TurnServiceDepsImpl, roll_and_move_with_deps, TurnResult,
 };
 use crate::repository::init::init_db;
 
@@ -87,7 +87,6 @@ pub struct ResultPlayer {
 fn map_action(action: &TurnAction) -> (&'static str, i32, Option<i32>) {
     match action {
         TurnAction::None => ("none", 0, None),
-        TurnAction::Purchase { price } => ("purchase", *price, None),
         TurnAction::PayToll { owner_id, amount } => ("pay_toll", *amount, Some(*owner_id)),
         TurnAction::Bankrupt { owner_id, paid } => ("bankrupt", *paid, Some(*owner_id)),
         TurnAction::EventWelfareFund { amount } => ("welfare_fund", *amount, None),
@@ -314,7 +313,6 @@ pub fn process_turn_with_repo<R: TurnRepo, D: TurnServiceDeps>(repo: &R, deps: &
         tile_price,
         tile_toll,
         tile_owner,
-        false,
         &tile_type,
     );
     apply_turn_result(conn, player_id, &turn_result)?;

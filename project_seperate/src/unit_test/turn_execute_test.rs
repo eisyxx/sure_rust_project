@@ -33,10 +33,6 @@ mod tests {
             self.calls.borrow_mut().push(format!("record_tx({},{},{},{})", player_id, tx_type, amount, target));
             Ok(())
         }
-        fn set_owner(&self, _conn: &Connection, tile_id: i32, player_id: i32, price: i32) -> rusqlite::Result<()> {
-            self.calls.borrow_mut().push(format!("set_owner({},{},{})", tile_id, player_id, price));
-            Ok(())
-        }
         fn reset_owner_for_player(&self, _conn: &Connection, player_id: i32) -> rusqlite::Result<()> {
             self.calls.borrow_mut().push(format!("reset_owner({})", player_id));
             Ok(())
@@ -84,18 +80,6 @@ mod tests {
         let calls = repo.calls();
         assert_eq!(calls[0], "update_pos_lap(1,5,1)");
         assert_eq!(calls.len(), 1); // 월급 0이면 update_money/record_tx 없음
-    }
-
-    // ── Purchase ──────────────────────────────────────────
-    #[test]
-    fn action_purchase() {
-        let repo = MockRepo::new();
-        let result = make_result(TurnAction::Purchase { price: 50 }, 0);
-        apply_turn_result_with_repo(&repo, &dummy_conn(), 1, &result).unwrap();
-        let calls = repo.calls();
-        assert!(calls.contains(&"update_money(1,-50)".to_string()));
-        assert!(calls.contains(&"record_tx(1,withdraw,50,tile5_purchase)".to_string()));
-        assert!(calls.contains(&"set_owner(5,1,50)".to_string()));
     }
 
     // ── PayToll ───────────────────────────────────────────
