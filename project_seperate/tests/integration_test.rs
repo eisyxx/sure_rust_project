@@ -157,7 +157,6 @@ mod integration_tests {
         // action_type 검증
         let valid_actions = vec![
             "move",
-            "can_buy",
             "purchase",
             "skip",
             "pay_toll",
