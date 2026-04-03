@@ -59,18 +59,6 @@ mod integration_case_tests {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  헬퍼: 플레이어 3,4 파산 처리 (2인 활성)
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    fn bankrupt_players_3_and_4(conn: &Connection) {
-        conn.execute("UPDATE players SET money=0, is_bankrupt=1 WHERE id=3", []).unwrap();
-        conn.execute("UPDATE players SET money=0, is_bankrupt=1 WHERE id=4", []).unwrap();
-    }
-
-    fn bankrupt_player_4(conn: &Connection) {
-        conn.execute("UPDATE players SET money=0, is_bankrupt=1 WHERE id=4", []).unwrap();
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  TRANS_NO_OWNER: 토지 소유자 없음
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -242,7 +230,6 @@ mod integration_case_tests {
     #[test]
     fn trans_owner_001_test() {
         let (conn, mut session) = setup();
-        bankrupt_players_3_and_4(&conn);
 
         // tile5 소유자 = player1
         conn.execute("UPDATE properties SET owner_id=1 WHERE tile_id=5", []).unwrap();
@@ -270,7 +257,7 @@ mod integration_case_tests {
             action_type: "pay_toll",
             action_amount: 5,
             owner_id: Some(1),
-            current_player_id: Some(1),
+            current_player_id: Some(3),
             game_finished: false,
             winner_id: None,
         });
@@ -286,7 +273,6 @@ mod integration_case_tests {
     #[test]
     fn trans_owner_002_test() {
         let (conn, mut session) = setup();
-        bankrupt_players_3_and_4(&conn);
 
         // tile4 소유자 = player1
         conn.execute("UPDATE properties SET owner_id=1 WHERE tile_id=4", []).unwrap();
@@ -316,7 +302,7 @@ mod integration_case_tests {
             action_type: "pay_toll",
             action_amount: 5,
             owner_id: Some(1),
-            current_player_id: Some(1),
+            current_player_id: Some(3),
             game_finished: false,
             winner_id: None,
         });
@@ -334,7 +320,6 @@ mod integration_case_tests {
     #[test]
     fn trans_owner_003_test() {
         let (conn, mut session) = setup();
-        bankrupt_player_4(&conn); // 3인 활성 [1,2,3]
 
         conn.execute("UPDATE properties SET owner_id=1 WHERE tile_id=5", []).unwrap();
         conn.execute("UPDATE players SET money=5 WHERE id=1", []).unwrap();
@@ -362,7 +347,7 @@ mod integration_case_tests {
             action_type: "bankrupt",
             action_amount: 3,
             owner_id: Some(1),
-            current_player_id: Some(1),
+            current_player_id: Some(3), 
             game_finished: false,
             winner_id: None,
         });
@@ -380,7 +365,6 @@ mod integration_case_tests {
     #[test]
     fn trans_owner_004_test() {
         let (conn, mut session) = setup();
-        bankrupt_players_3_and_4(&conn);
 
         conn.execute("UPDATE properties SET owner_id=1 WHERE tile_id=5", []).unwrap();
         conn.execute("UPDATE players SET money=5, position=2 WHERE id=1", []).unwrap();
@@ -485,13 +469,21 @@ mod integration_case_tests {
             &mut session,
         ).unwrap();
 
-        assert_eq!(result.player_id, 1);
-        assert_eq!(result.dice, 4);
-        assert_eq!(result.old_position, 2);
-        assert_eq!(result.new_position, 6);
-        assert_eq!(result.action_type, "welfare_fund_bankrupt");
-        assert_eq!(result.action_amount, 3);
-        assert_eq!(result.owner_id, None);
+        assert_turn_result(&result, ExpectedTurnOutcome {
+            player_id: 1,
+            dice: 4,
+            old_position: 2,
+            new_position: 6,
+            old_lap: 0,
+            new_lap: 0,
+            salary: 0,
+            action_type: "welfare_fund_bankrupt",
+            action_amount: 3,
+            owner_id: None,
+            current_player_id: Some(2),
+            game_finished: false,
+            winner_id: None,
+        });
 
         // DB 검증
         let money: i32 = conn.query_row("SELECT money FROM players WHERE id=1", [], |r| r.get(0)).unwrap();
@@ -646,13 +638,21 @@ mod integration_case_tests {
             &mut session,
         ).unwrap();
 
-        assert_eq!(result.player_id, 1);
-        assert_eq!(result.dice, 4);
-        assert_eq!(result.old_position, 8);
-        assert_eq!(result.new_position, 12);
-        assert_eq!(result.action_type, "estate_tax_bankrupt");
-        assert_eq!(result.action_amount, 10);
-        assert_eq!(result.owner_id, None);
+        assert_turn_result(&result, ExpectedTurnOutcome {
+            player_id: 1,
+            dice: 4,
+            old_position: 8,
+            new_position: 12,
+            old_lap: 0,
+            new_lap: 0,
+            salary: 0,
+            action_type: "estate_tax_bankrupt",
+            action_amount: 10,
+            owner_id: None,
+            current_player_id: Some(2),
+            game_finished: false,
+            winner_id: None,
+        });
 
         // DB 검증
         let money: i32 = conn.query_row("SELECT money FROM players WHERE id=1", [], |r| r.get(0)).unwrap();

@@ -230,3 +230,9 @@ pub enum TurnAction {
     EstateTaxBankrupt { paid: i32 },
     EstateTaxSkipped,
 }
+
+impl TurnAction {
+    pub fn is_bankrupt(&self) -> bool {
+        matches!(self, TurnAction::Bankrupt { .. } | TurnAction::EventWelfareFundBankrupt { .. } | TurnAction::EstateTaxBankrupt { .. })
+    }
+}

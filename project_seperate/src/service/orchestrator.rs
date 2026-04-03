@@ -113,6 +113,7 @@ fn to_game_player(row: &PlayerRow) -> GamePlayer {
 fn advance_turn(
     conn: &Connection,
     session: &mut SessionState,
+    bankrupt_occurred: bool,
 ) -> rusqlite::Result<()> {
     let result = evaluate_and_apply_game_end(conn)?;
     session.game_finished = result.game_finished;
@@ -121,7 +122,9 @@ fn advance_turn(
         session.winner_id = result.winner_id;
         session.final_rankings = result.rankings;
     } else {
-        session.current_turn_index += 1;
+        if !bankrupt_occurred {
+            session.current_turn_index += 1;
+        }
         session.winner_id = None;
         session.final_rankings = None;
     }
@@ -218,7 +221,7 @@ pub fn process_turn_with_repo<R: TurnRepo, D: TurnServiceDeps>(repo: &R, deps: &
     let players = repo.get_active_game_players(conn)?;
 
     if players.is_empty() {
-        advance_turn(conn, session)?;
+        advance_turn(conn, session, false)?;
 
         return Ok(TurnOutcome {
             player_id: 0,
@@ -316,7 +319,8 @@ pub fn process_turn_with_repo<R: TurnRepo, D: TurnServiceDeps>(repo: &R, deps: &
     );
     apply_turn_result(conn, player_id, &turn_result)?;
 
-    advance_turn(conn, session)?;
+    let bankrupt_occurred = turn_result.action.is_bankrupt();
+    advance_turn(conn, session, bankrupt_occurred)?;
 
     let players_after = get_player_states(conn)?; // [DB 읽기] repository 직접 호출
     let tile_owners = get_owned_tiles(conn)?; // [DB 읽기] repository 직접 호출
@@ -372,7 +376,7 @@ pub fn process_decide(
         _ => ("skip", 0),
     };
 
-    advance_turn(conn, session)?;
+    advance_turn(conn, session, false)?;
 
     let players_after = get_player_states(conn)?; // [DB 읽기] repository 직접 호출
     let tile_owners = get_owned_tiles(conn)?; // [DB 읽기] repository 직접 호출
