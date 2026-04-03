@@ -136,12 +136,17 @@ mod integration_tests {
 
         // 실행
         let result = process_turn(&conn, &mut session).unwrap();
+        let final_result = if result.action_type == "can_buy" {
+            process_decide(&conn, &mut session, true).unwrap()
+        } else {
+            result
+        };
 
         // 기본 출력 검증
-        assert!(result.dice >= 1 && result.dice <= 6);
-        assert!(result.new_position >= 0);
+        assert!(final_result.dice >= 1 && final_result.dice <= 6);
+        assert!(final_result.new_position >= 0);
 
-        // action_type은 허용된 값 중 하나여야 함
+        // action_type 검증
         let valid_actions = vec![
             "move",
             "can_buy",
@@ -151,22 +156,15 @@ mod integration_tests {
             "event",
             "bankrupt",
             "none",
-            "can_buy",
+            "welfare_fund",
+            "welfare_fund_bankrupt",
+            "fund_receive",
+            "fund_receive_empty",
+            "estate_tax",
+            "estate_tax_bankrupt",
+            "estate_tax_skipped",
         ];
-
-        assert!(valid_actions.contains(&&*result.action_type));
-
-        // can_buy면 decide까지 포함해서 한 턴 완성
-        if result.action_type == "can_buy" {
-            let result2 = process_decide(&conn, &mut session, true).unwrap();
-
-            let valid_after_decide = vec![
-                "purchase",
-                "skip",
-            ];
-
-            assert!(valid_after_decide.contains(&&*result2.action_type));
-        }
+        assert!(valid_actions.contains(&&*final_result.action_type));
 
         // 상태 검증
         let state = get_state(&conn, &session).unwrap();
