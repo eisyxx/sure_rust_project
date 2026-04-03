@@ -700,5 +700,46 @@ mod integration_case_tests {
         let money: i32 = conn.query_row("SELECT money FROM players WHERE id=1", [], |r| r.get(0)).unwrap();
         assert_eq!(money, 10);
     }
-}
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  GAME_END: 게임 종료 조건 - 생존자 1명
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /// GAME_END_001: 3명 파산, 1명 생존 → 게임 종료
+    #[test]
+    fn game_end_001_last_survivor_test() {
+        let (conn, mut session) = setup();
+
+        // player 2, 3, 4 파산 처리
+        conn.execute("UPDATE players SET is_bankrupt=1, money=0 WHERE id IN (2,3,4)", []).unwrap();
+        // player 1: position=2, money=100, 본인 소유 타일로 이동 (no toll)
+        conn.execute("UPDATE players SET money=100, position=2 WHERE id=1", []).unwrap();
+        conn.execute("UPDATE properties SET owner_id=1 WHERE tile_id=5", []).unwrap();
+
+        session.current_turn_index = 0; // player1 차례
+
+        let repo = TurnRepoImpl;
+        let result = process_turn_with_repo(
+            &repo,
+            &MockDeps { dice: 3 },
+            &conn,
+            &mut session,
+        ).unwrap();
+
+        assert_turn_result(&result, ExpectedTurnOutcome {
+            player_id: 1,
+            dice: 3,
+            old_position: 2,
+            new_position: 5,
+            old_lap: 0,
+            new_lap: 0,
+            salary: 0,
+            action_type: "none",
+            action_amount: 0,
+            owner_id: None,
+            current_player_id: Some(1),
+            game_finished: true,
+            winner_id: Some(1),
+        });
+    }
+}
