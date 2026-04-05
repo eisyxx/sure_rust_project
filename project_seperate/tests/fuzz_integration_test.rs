@@ -57,10 +57,12 @@ mod fuzz_tests {
             position in 0i32..30,
             will_buy in any::<bool>(),
         ) {
-            println!( // 디버깅용
+/* 디버깅용
+            println!(
                 "[INPUT] dice={}, money={}, position={}, will_buy={}",
                 dice, money, position, will_buy
             );
+*/
 
             let conn = Connection::open_in_memory().unwrap();
             let mut session = init_session(&conn).unwrap();
