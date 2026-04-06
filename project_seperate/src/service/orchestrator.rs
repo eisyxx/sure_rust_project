@@ -1,17 +1,20 @@
 use rusqlite::Connection;
 
 use crate::repository::{
-    player_repo::{get_all_players, get_player_states, PlayerRow, PlayerState},
-    property_repo::{get_owned_tiles, TileOwnerRecord},
-    transcaction_repo::{get_transactions_by_player, TransactionRecord},
+    player_repo::{PlayerRow, PlayerState, get_all_players, get_player_states},
+    property_repo::{TileOwnerRecord, get_owned_tiles},
+    transcaction_repo::{TransactionRecord, get_transactions_by_player},
 };
+
+use crate::service::traits::TurnServiceDeps;
+use crate::service::traits::TurnRepo;
 
 use crate::service::buy_property_service::{is_purchasable_tile, decide_buy_property, BuyResult};
 use crate::service::game_end_service::{evaluate_and_apply_game_end, Player as GamePlayer};
 use crate::service::turn_execute_service::{apply_turn_result, pre_apply_move_salary, apply_purchase};
 use crate::service::turn_service::{
-    build_landing_context, build_turn_result, roll_and_move, get_active_game_players,
-    resolve_current_player_id, TurnAction,
+    build_landing_context, build_turn_result, get_active_game_players,
+    resolve_current_player_id, TurnAction, TurnServiceDepsImpl, roll_and_move_with_deps, TurnResult,
 };
 use crate::repository::init::init_db;
 
@@ -84,7 +87,6 @@ pub struct ResultPlayer {
 fn map_action(action: &TurnAction) -> (&'static str, i32, Option<i32>) {
     match action {
         TurnAction::None => ("none", 0, None),
-        TurnAction::Purchase { price } => ("purchase", *price, None),
         TurnAction::PayToll { owner_id, amount } => ("pay_toll", *amount, Some(*owner_id)),
         TurnAction::Bankrupt { owner_id, paid } => ("bankrupt", *paid, Some(*owner_id)),
         TurnAction::EventWelfareFund { amount } => ("welfare_fund", *amount, None),
@@ -110,6 +112,7 @@ fn to_game_player(row: &PlayerRow) -> GamePlayer {
 fn advance_turn(
     conn: &Connection,
     session: &mut SessionState,
+    bankrupt_occurred: bool,
 ) -> rusqlite::Result<()> {
     let result = evaluate_and_apply_game_end(conn)?;
     session.game_finished = result.game_finished;
@@ -118,12 +121,47 @@ fn advance_turn(
         session.winner_id = result.winner_id;
         session.final_rankings = result.rankings;
     } else {
-        session.current_turn_index += 1;
+        if !bankrupt_occurred {
+            session.current_turn_index += 1;
+        }
         session.winner_id = None;
         session.final_rankings = None;
     }
 
     Ok(())
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  trait
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+pub struct TurnRepoImpl;
+
+impl TurnRepo for TurnRepoImpl {
+    fn get_active_game_players(&self, conn: &Connection) -> rusqlite::Result<Vec<GamePlayer>> {
+        get_active_game_players(conn)
+    }
+    fn get_active_players(&self, conn: &Connection) -> rusqlite::Result<Vec<GamePlayer>> {
+        get_active_game_players(conn)
+    }
+    fn get_player_states(&self, conn: &Connection) -> rusqlite::Result<Vec<PlayerState>> {
+        get_player_states(conn)
+    }
+    fn get_owned_tiles(&self, conn: &Connection) -> rusqlite::Result<Vec<TileOwnerRecord>> {
+        get_owned_tiles(conn)
+    }
+    fn resolve_current_player_id(&self, conn: &Connection, idx: usize) -> rusqlite::Result<Option<i32>> {
+        resolve_current_player_id(conn, idx)
+    }
+    fn apply_turn_result(&self, conn: &Connection, player_id: i32, result: &TurnResult) -> rusqlite::Result<()> {
+        apply_turn_result(conn, player_id, result)
+    }
+    fn pre_apply_move_salary(&self, conn: &Connection, player_id: i32, pos: i32, lap: i32, salary: i32) -> rusqlite::Result<()> {
+        pre_apply_move_salary(conn, player_id, pos, lap, salary)
+    }
+    fn apply_purchase(&self, conn: &Connection, player_id: i32, pos: i32, price: i32) -> rusqlite::Result<()> {
+        apply_purchase(conn, player_id, pos, price)
+    }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -167,12 +205,22 @@ pub fn get_transactions(conn: &Connection, player_id: i32) -> rusqlite::Result<V
     get_transactions_by_player(conn, player_id) // [DB 읽기] repository 직접 호출
 }
 
-/// 한 턴 진행
-pub fn process_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::Result<TurnOutcome> {
-    let players = get_active_game_players(conn)?;
+/// 테스트 용
+pub fn process_turn(
+    conn: &Connection,
+    session: &mut SessionState,
+) -> rusqlite::Result<TurnOutcome> {
+    let repo = TurnRepoImpl;
+    let deps = TurnServiceDepsImpl;
+    process_turn_with_repo(&repo, &deps, conn, session)
+}
+
+/// 한 턴 진행 (기본)
+pub fn process_turn_with_repo<R: TurnRepo, D: TurnServiceDeps>(repo: &R, deps: &D, conn: &Connection, session: &mut SessionState) -> rusqlite::Result<TurnOutcome> {
+    let players = repo.get_active_game_players(conn)?;
 
     if players.is_empty() {
-        advance_turn(conn, session)?;
+        advance_turn(conn, session, false)?;
 
         return Ok(TurnOutcome {
             player_id: 0,
@@ -199,7 +247,7 @@ pub fn process_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::
 
     let current_player = &players[session.current_turn_index];
 
-    let move_step = roll_and_move(current_player.position, current_player.lap, 24);
+    let move_step = roll_and_move_with_deps(deps, current_player.position, current_player.lap, 24);
 
     let landing = build_landing_context(
         conn,
@@ -215,7 +263,7 @@ pub fn process_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::
 
     // 구매 가능 타일 → 구매 여부를 클라이언트에 질의
     if is_purchasable_tile(tile_owner, &tile_type, tile_price) {
-        pre_apply_move_salary(conn, current_player.id, move_step.new_position, move_step.new_lap, move_step.salary)?;
+        repo.pre_apply_move_salary(conn, current_player.id, move_step.new_position, move_step.new_lap, move_step.salary)?;
 
         session.pending = Some(PendingTurn {
             player_id: current_player.id,
@@ -229,9 +277,9 @@ pub fn process_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::
             money_after_salary,
         });
 
-        let players_after = get_player_states(conn)?; // [DB 읽기] repository 직접 호출
-        let tile_owners = get_owned_tiles(conn)?; // [DB 읽기] repository 직접 호출
-        let cpi = resolve_current_player_id(conn, session.current_turn_index)?;
+        let players_after = repo.get_player_states(conn)?; // [DB 읽기] repository 직접 호출
+        let tile_owners = repo.get_owned_tiles(conn)?; // [DB 읽기] repository 직접 호출
+        let cpi = repo.resolve_current_player_id(conn, session.current_turn_index)?;
 
         return Ok(TurnOutcome {
             player_id: current_player.id,
@@ -265,12 +313,12 @@ pub fn process_turn(conn: &Connection, session: &mut SessionState) -> rusqlite::
         tile_price,
         tile_toll,
         tile_owner,
-        false,
         &tile_type,
     );
     apply_turn_result(conn, player_id, &turn_result)?;
 
-    advance_turn(conn, session)?;
+    let bankrupt_occurred = turn_result.action.is_bankrupt();
+    advance_turn(conn, session, bankrupt_occurred)?;
 
     let players_after = get_player_states(conn)?; // [DB 읽기] repository 직접 호출
     let tile_owners = get_owned_tiles(conn)?; // [DB 읽기] repository 직접 호출
@@ -326,7 +374,7 @@ pub fn process_decide(
         _ => ("skip", 0),
     };
 
-    advance_turn(conn, session)?;
+    advance_turn(conn, session, false)?;
 
     let players_after = get_player_states(conn)?; // [DB 읽기] repository 직접 호출
     let tile_owners = get_owned_tiles(conn)?; // [DB 읽기] repository 직접 호출

@@ -7,3 +7,6 @@ mod roll_dice_test;
 mod salary_test;
 mod turn_execute_test;
 mod turn_test;
+mod movement_fuzz_test;
+mod salary_fuzz_test;
+mod apply_turn_result_fuzz_test;

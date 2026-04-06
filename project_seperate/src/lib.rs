@@ -14,6 +14,3 @@ pub struct AppState {
 
 #[cfg(test)]
 mod unit_test;
-
-#[cfg(test)]
-mod integration_test;

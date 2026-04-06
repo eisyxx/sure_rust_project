@@ -15,9 +15,7 @@ pub fn decide_buy_property(
     tile_type: String,
 ) -> BuyResult {
 
-    if tile_type == "event" {
-        return BuyResult::Skip;
-    }
+
 
     if tile_type == "start" {
         return BuyResult::Skip;
