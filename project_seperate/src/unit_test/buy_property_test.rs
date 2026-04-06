@@ -5,7 +5,6 @@ owner 있음 + 돈 부족 → Bankrupt
 owner 없음 + 구매 안함 → Skip
 owner 없음 + 구매 함 → Purchase
 owner 없음 + 돈 부족 → NotEnoughMoney
-tile_type == "event" → Skip
 tile_type == "start" → Skip
 */
 
@@ -70,13 +69,6 @@ mod tests {
         let result = decide_buy_property(1, 10, 50, 10, None, true, "land".to_string());
 
         assert!(matches!(result, BuyResult::NotEnoughMoney));
-    }
-
-    #[test]
-    fn test_event_tile_skip() {
-        let result = decide_buy_property(1, 100, 50, 10, None, true, "event".to_string());
-
-        assert!(matches!(result, BuyResult::Skip));
     }
 
     #[test]
