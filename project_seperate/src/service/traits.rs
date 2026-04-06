@@ -33,7 +33,6 @@ pub trait TurnExecuteRepo {
 
 pub trait TurnRepo {
     fn get_active_game_players(&self, conn: &Connection) -> rusqlite::Result<Vec<GamePlayer>>;
-    fn get_active_players(&self, conn: &Connection) -> rusqlite::Result<Vec<GamePlayer>>;
     fn get_player_states(&self, conn: &Connection) -> rusqlite::Result<Vec<PlayerState>>;
     fn get_owned_tiles(&self, conn: &Connection) -> rusqlite::Result<Vec<TileOwnerRecord>>;
     fn resolve_current_player_id(&self, conn: &Connection, idx: usize) -> rusqlite::Result<Option<i32>>;

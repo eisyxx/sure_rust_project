@@ -34,51 +34,6 @@ mod integration_tests {
         }
     }
 
-    /* 
-
-
-    // 게임 리셋
-    #[test]
-    fn test_reset_game() {
-        let (conn, mut session) = setup();
-
-        let _ = process_turn(&conn, &mut session);
-
-        reset_game(&conn, &mut session).unwrap();
-
-        assert_eq!(session.current_turn_index, 0);
-        assert!(!session.game_finished);
-    }
-
-    // 결과 조회
-    #[test]
-    fn test_get_result() {
-        let (conn, session) = setup();
-
-        let result = get_result(&conn, &session);
-
-        assert!(result.len() >= 0);
-    }
-
-    // 플레이어 0명 상태 (orchestrator 분기 커버)
-    #[test]
-    fn test_process_turn_no_active_players() {
-        use crate::repository::player_repo::{get_all_players, bankrupt};
-
-        let (conn, mut session) = setup();
-
-        // 모든 플레이어 파산 처리
-        let players = get_all_players(&conn).unwrap();
-        for p in players {
-            bankrupt(&conn, p.id).unwrap();
-        }
-
-        let result = process_turn(&conn, &mut session);
-
-        assert!(result.is_err() || result.is_ok());
-    }
-    */
-
  
     /// 게임 정상 종료 및 턴 개수 일치 여부 테스트
     #[test]
@@ -234,5 +189,124 @@ mod integration_tests {
             tx.amount == 200 &&
             tx.target.contains("tile")
         ));
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  get_result() 커버리지
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /// 게임 진행 중 결과 조회 (final_rankings = None → else 분기)
+    #[test]
+    fn test_get_result_during_game() {
+        let (conn, session) = setup();
+
+        let result = get_result(&conn, &session);
+
+        // 초기 플레이어 4명 전부 반환
+        assert_eq!(result.len(), 4);
+
+        // 게임 진행 중이므로 rank는 전부 None
+        for p in &result {
+            assert_eq!(p.rank, None);
+            assert!(!p.is_bankrupt);
+        }
+    }
+
+    /// 게임 종료 후 결과 조회 (final_rankings = Some → if let 분기)
+    #[test]
+    fn test_get_result_after_game_end() {
+        let (conn, mut session) = setup();
+
+        // 플레이어 2,3,4를 파산 처리
+        conn.execute("UPDATE players SET is_bankrupt=1, money=0 WHERE id IN (2,3,4)", []).unwrap();
+
+        // 게임 종료 상태 세팅
+        session.game_finished = true;
+        session.winner_id = Some(1);
+        session.final_rankings = Some(vec![(1, 300), (2, 0), (3, 0), (4, 0)]);
+
+        let result = get_result(&conn, &session);
+
+        assert_eq!(result.len(), 4);
+
+        // 1번 플레이어: 생존 → rank = Some(1)
+        let p1 = result.iter().find(|p| p.id == 1).unwrap();
+        assert_eq!(p1.rank, Some(1));
+        assert_eq!(p1.money, 300);
+        assert!(!p1.is_bankrupt);
+
+        // 파산 플레이어: rank = None
+        for id in [2, 3, 4] {
+            let p = result.iter().find(|p| p.id == id).unwrap();
+            assert_eq!(p.rank, None);
+            assert!(p.is_bankrupt);
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  reset_game() 커버리지
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /// 게임 진행 후 리셋 → 세션 + DB 모두 초기 상태로 복원
+    #[test]
+    fn test_reset_game() {
+        let (conn, mut session) = setup();
+
+        // 턴을 진행해서 세션 상태를 변경시킴
+        let result = process_turn(&conn, &mut session).unwrap();
+        if result.action_type == "can_buy" {
+            let _ = process_decide(&conn, &mut session, true).unwrap();
+        }
+
+        // 세션 상태가 변경됐는지 확인
+        assert!(session.current_turn_index > 0 || session.pending.is_some() || session.game_finished);
+
+        // 리셋 실행
+        reset_game(&conn, &mut session).unwrap();
+
+        // 세션 필드 초기화 검증
+        assert_eq!(session.current_turn_index, 0);
+        assert!(!session.game_finished);
+        assert_eq!(session.winner_id, None);
+        assert!(session.pending.is_none());
+        assert!(session.final_rankings.is_none());
+
+        // DB 초기화 검증: 모든 플레이어 초기 상태
+        let state = get_state(&conn, &session).unwrap();
+        assert_eq!(state.players.len(), 4);
+        for p in &state.players {
+            assert_eq!(p.position, 0);
+            assert_eq!(p.money, 300);
+            assert!(!p.is_bankrupt);
+        }
+
+        // DB 초기화 검증: 소유자 없음
+        assert!(state.tile_owners.is_empty());
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  players.is_empty() 분기 커버리지
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /// 모든 플레이어 파산 상태에서 턴 진행 → is_empty() 분기 진입
+    #[test]
+    fn test_process_turn_no_active_players() {
+        let (conn, mut session) = setup();
+
+        // 모든 플레이어를 파산 처리
+        conn.execute("UPDATE players SET is_bankrupt=1, money=0 WHERE id IN (1,2,3,4)", []).unwrap();
+
+        let result = process_turn(&conn, &mut session).unwrap();
+
+        // is_empty 분기: 기본값 반환
+        assert_eq!(result.player_id, 0);
+        assert_eq!(result.dice, 0);
+        assert_eq!(result.action_type, "none");
+        assert!(result.players.is_empty());
+        assert!(result.tile_owners.is_empty());
+        assert_eq!(result.current_player_id, None);
+
+        // advance_turn이 게임 종료를 감지해야 함
+        assert!(session.game_finished);
     }
 }
