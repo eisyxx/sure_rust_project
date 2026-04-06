@@ -30,12 +30,12 @@ pub fn record_transaction(
     })?;
     
     // 거래 전 잔액 계산
-    let balance_before = if tx_type == "deposit" {
-        balance_after - amount
-    } else if tx_type == "withdraw" {
-        balance_after + amount
-    } else {
-        balance_after
+    let balance_before = match tx_type {
+        "deposit" => balance_after - amount,
+        "withdraw" => balance_after + amount,
+        _ => return Err(rusqlite::Error::InvalidParameterName(
+            format!("invalid tx_type: {}", tx_type),
+        )),
     };
     
     conn.execute(
