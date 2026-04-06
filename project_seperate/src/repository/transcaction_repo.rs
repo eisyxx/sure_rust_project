@@ -40,7 +40,7 @@ pub fn record_transaction(
     
     conn.execute(
         "INSERT INTO transactions (player_id, type, amount, target, balance_before, balance_after, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now','localtime'))",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now','utc','+9 hours'))",
         (player_id, tx_type, amount, target, balance_before, balance_after),
     )?;
     Ok(())
