@@ -70,8 +70,6 @@ pub fn create_db(conn: &Connection) -> Result<()> {
         [],
     )?;
 
-    ensure_transactions_balance_columns(conn)?;
-
     // 6. event_tiles: 이벤트 정보
     // tile_id: 토지 번호(tile.id 연결), event_type=(A 사회복지기금, B 종합부동산세, 기금 수령처), amount=금액, description=이벤트 설명(UI용)
     conn.execute(
@@ -93,36 +91,5 @@ pub fn create_db(conn: &Connection) -> Result<()> {
     )?;
 
     println!("DB 생성 완료");
-    Ok(())
-}
-
-// 기존 DB와의 호환을 위한 마이그레이션 처리 (transactions 테이블에 balance_before/after 컬럼이 없으면 추가)
-fn ensure_transactions_balance_columns(conn: &Connection) -> Result<()> {
-    let mut stmt = conn.prepare("PRAGMA table_info(transactions)")?;
-    let mut rows = stmt.query([])?;
-
-    let mut has_balance_before = false;
-    let mut has_balance_after = false;
-
-    while let Some(row) = rows.next()? {
-        let column_name: String = row.get(1)?;
-
-        if column_name == "balance_before" {
-            has_balance_before = true;
-        }
-
-        if column_name == "balance_after" {
-            has_balance_after = true;
-        }
-    }
-
-    if !has_balance_before {
-        conn.execute("ALTER TABLE transactions ADD COLUMN balance_before INTEGER", [])?;
-    }
-
-    if !has_balance_after {
-        conn.execute("ALTER TABLE transactions ADD COLUMN balance_after INTEGER", [])?;
-    }
-
     Ok(())
 }
