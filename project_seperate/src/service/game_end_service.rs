@@ -44,13 +44,23 @@ pub fn check_game_end(players: Vec<Player>) -> GameResult {
         };
     }
 
+    // 전원 파산 예외 처리
+    if active_players.is_empty() {
+        return GameResult {
+            is_finished: true,
+            winner_id: None,
+            rankings: vec![],
+            rewards: vec![],
+        };
+    }
+
     // 보상 계산 (생존자 기준)
     let mut rewards: Vec<(i32, i32)> = vec![];
 
     if active_players.len() == 1 {
         // 생존자 1명 → 150 지급
         rewards.push((active_players[0].id, 150));
-    } else if !active_players.is_empty() {
+    } else {
         // 일반 케이스 → lap 기준 상위 3명
         let mut sorted_for_reward = active_players.clone();
         sorted_for_reward.sort_by(|a, b| b.lap.cmp(&a.lap));
@@ -65,7 +75,7 @@ pub fn check_game_end(players: Vec<Player>) -> GameResult {
             .collect();
     }
 
-    // 랭킹 계산 (항상 전체 플레이어 기준)
+    // 랭킹 계산 (전체 플레이어 기준)
     let mut rankings: Vec<(i32, i32)> = players
         .iter()
         .map(|p| {
@@ -85,7 +95,7 @@ pub fn check_game_end(players: Vec<Player>) -> GameResult {
 
     rankings.sort_by(|a, b| b.1.cmp(&a.1));
 
-    // winner 계산 (항상 rankings 기준)
+    // winner 계산 (rankings 기준)
     let winner_id = rankings
         .iter()
         .find(|(_, money)| *money != -1)
