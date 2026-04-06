@@ -11,6 +11,7 @@ mod tests {
     use crate::repository::player_repo::PlayerState;
 
     // ── Mock ──────────────────────────────────────────────
+    // 주사위 값과 이벤트 결과를 고정해서 반환하는 Mock
     struct MockDeps {
         dice: i32,
         event_result: EventResult,
@@ -21,7 +22,7 @@ mod tests {
             self.dice
         }
         fn handle_event(&self, _conn: &Connection, _player_id: i32, _tile_id: i32) -> EventResult {
-            // EventResult은 PartialEq가 있지만 Copy/Clone이 없어 직접 재구성
+            // EventResult는 Clone이 없어서 패턴 매칭으로 재생성
             match &self.event_result {
                 EventResult::WelfareFund { amount } => EventResult::WelfareFund { amount: *amount },
                 EventResult::WelfareFundBankrupt { paid } => EventResult::WelfareFundBankrupt { paid: *paid },
@@ -35,10 +36,12 @@ mod tests {
         }
     }
 
+    // 인메모리 DB
     fn dummy_conn() -> Connection {
         Connection::open_in_memory().unwrap()
     }
 
+    // 이동 결과 생성 헬퍼
     fn make_move_step(dice: i32, pos: i32, lap: i32, salary: i32) -> MoveStep {
         MoveStep { dice, new_position: pos, new_lap: lap, salary }
     }
@@ -46,6 +49,10 @@ mod tests {
     // ── roll_and_move_with_deps ───────────────────────────
     #[test]
     fn roll_and_move_no_wrap() {
+        // 보드 끝을 넘지 않는 일반 이동:
+        // - 위치만 증가
+        // - lap 증가 없음
+        // - salary 없음
         let deps = MockDeps { dice: 3, event_result: EventResult::None };
         let result = roll_and_move_with_deps(&deps, 5, 0, 24);
         assert_eq!(result.dice, 3);
@@ -56,6 +63,10 @@ mod tests {
 
     #[test]
     fn roll_and_move_wrap_around() {
+        // 보드 끝을 넘어가는 경우:
+        // - 위치는 modulo 처리
+        // - lap 증가
+        // - salary 지급
         let deps = MockDeps { dice: 5, event_result: EventResult::None };
         let result = roll_and_move_with_deps(&deps, 22, 0, 24);
         assert_eq!(result.dice, 5);
@@ -66,6 +77,7 @@ mod tests {
 
     // ── build_turn_result_with_deps: 이벤트 타일 ──────────
     #[test]
+    // 복지기금 납부 이벤트
     fn event_welfare_fund() {
         let deps = MockDeps { dice: 0, event_result: EventResult::WelfareFund { amount: 50 } };
         let result = build_turn_result_with_deps(
@@ -76,6 +88,7 @@ mod tests {
     }
 
     #[test]
+    // 복지기금 내다가 파산
     fn event_welfare_fund_bankrupt() {
         let deps = MockDeps { dice: 0, event_result: EventResult::WelfareFundBankrupt { paid: 30 } };
         let result = build_turn_result_with_deps(
@@ -86,6 +99,7 @@ mod tests {
     }
 
     #[test]
+    // 재산세 납부
     fn event_estate_tax() {
         let deps = MockDeps { dice: 0, event_result: EventResult::EstateTax { amount: 40 } };
         let result = build_turn_result_with_deps(
@@ -96,6 +110,7 @@ mod tests {
     }
 
     #[test]
+    // 재산세 내다가 파산
     fn event_estate_tax_bankrupt() {
         let deps = MockDeps { dice: 0, event_result: EventResult::EstateTaxBankrupt { paid: 20 } };
         let result = build_turn_result_with_deps(
@@ -106,6 +121,7 @@ mod tests {
     }
 
     #[test]
+    // 재산세 면제
     fn event_estate_tax_skipped() {
         let deps = MockDeps { dice: 0, event_result: EventResult::EstateTaxSkipped };
         let result = build_turn_result_with_deps(
@@ -116,6 +132,7 @@ mod tests {
     }
 
     #[test]
+    // 복지기금 수령
     fn event_fund_receive() {
         let deps = MockDeps { dice: 0, event_result: EventResult::FundReceive { amount: 300 } };
         let result = build_turn_result_with_deps(
@@ -126,6 +143,7 @@ mod tests {
     }
 
     #[test]
+    // 복지기금 없음
     fn event_fund_receive_empty() {
         let deps = MockDeps { dice: 0, event_result: EventResult::FundReceiveEmpty };
         let result = build_turn_result_with_deps(
@@ -136,6 +154,7 @@ mod tests {
     }
 
     #[test]
+    // 이벤트 없음
     fn event_none() {
         let deps = MockDeps { dice: 0, event_result: EventResult::None };
         let result = build_turn_result_with_deps(
@@ -147,6 +166,7 @@ mod tests {
 
     // ── build_turn_result_with_deps: 일반 타일 (buy_property) ──
     #[test]
+    // 주인 없는 땅 → 아무 액션 없음
     fn land_no_owner_skips() {
         let deps = MockDeps { dice: 0, event_result: EventResult::None };
         let result = build_turn_result_with_deps(
@@ -157,6 +177,7 @@ mod tests {
     }
 
     #[test]
+    // 주인이 있는 땅 → 통행료 지불
     fn land_pay_toll() {
         let deps = MockDeps { dice: 0, event_result: EventResult::None };
         let result = build_turn_result_with_deps(
@@ -167,6 +188,7 @@ mod tests {
     }
 
     #[test]
+    // 돈 부족 → 파산 처리
     fn land_bankrupt() {
         let deps = MockDeps { dice: 0, event_result: EventResult::None };
         let result = build_turn_result_with_deps(
@@ -177,6 +199,7 @@ mod tests {
     }
 
     #[test]
+    // 구매도 못하고 아무 행동도 안하는 케이스
     fn land_not_enough_money() {
         let deps = MockDeps { dice: 0, event_result: EventResult::None };
         let result = build_turn_result_with_deps(
@@ -187,6 +210,7 @@ mod tests {
     }
 
     #[test]
+    // 시작 타일 → 아무 액션 없음
     fn start_tile_skip() {
         let deps = MockDeps { dice: 0, event_result: EventResult::None };
         let result = build_turn_result_with_deps(
@@ -198,6 +222,7 @@ mod tests {
 
     // ── TurnResult 필드 검증 ──────────────────────────────
     #[test]
+    // MoveStep 값이 TurnResult로 그대로 전달되는지 확인
     fn turn_result_carries_move_step_fields() {
         let deps = MockDeps { dice: 0, event_result: EventResult::None };
         let result = build_turn_result_with_deps(
@@ -211,6 +236,7 @@ mod tests {
     }
 
     // ── resolve_current_player_id Mock ────────────────────
+    // 플레이어 상태를 반환하는 Mock Repo
     struct MockPlayerStateRepo {
         players: Vec<PlayerState>,
     }
@@ -235,6 +261,7 @@ mod tests {
 
     // ── resolve_current_player_id_with_repo ───────────────
     #[test]
+    // 모든 플레이어가 파산 → None 반환
     fn resolve_player_id_no_active_players() {
         let repo = MockPlayerStateRepo {
             players: vec![make_player(1, true), make_player(2, true)],
@@ -244,6 +271,7 @@ mod tests {
     }
 
     #[test]
+    // turn index에 맞는 플레이어 반환
     fn resolve_player_id_returns_correct_player() {
         let repo = MockPlayerStateRepo {
             players: vec![make_player(1, false), make_player(2, false), make_player(3, false)],
@@ -254,6 +282,7 @@ mod tests {
     }
 
     #[test]
+    // 인덱스가 플레이어 수를 넘어가면 순환
     fn resolve_player_id_wraps_index() {
         let repo = MockPlayerStateRepo {
             players: vec![make_player(1, false), make_player(2, false)],
@@ -263,6 +292,7 @@ mod tests {
     }
 
     #[test]
+    // 파산한 플레이어는 건너뛰고 다음 플레이어 선택
     fn resolve_player_id_skips_bankrupt() {
         let repo = MockPlayerStateRepo {
             players: vec![make_player(1, true), make_player(2, false), make_player(3, false)],

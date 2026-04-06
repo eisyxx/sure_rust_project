@@ -7,6 +7,7 @@ mod tests {
     use crate::service::traits::TurnExecuteRepo;
 
     // ── Mock ──────────────────────────────────────────────
+    // DB 대신 호출 기록을 남기는 Mock Repo
     struct MockRepo {
         calls: RefCell<Vec<String>>,
     }
@@ -20,6 +21,7 @@ mod tests {
         }
     }
 
+    // 실제 DB 작업 대신 어떤 함수가 호출됐는지만 기록
     impl TurnExecuteRepo for MockRepo {
         fn update_position_and_lap(&self, _conn: &Connection, player_id: i32, pos: i32, lap: i32) -> rusqlite::Result<()> {
             self.calls.borrow_mut().push(format!("update_pos_lap({},{},{})", player_id, pos, lap));
@@ -51,10 +53,12 @@ mod tests {
         }
     }
 
+    // 인메모리 DB (실제 DB 영향 없음)
     fn dummy_conn() -> Connection {
         Connection::open_in_memory().unwrap()
     }
 
+    // 테스트용 TurnResult 생성 헬퍼
     fn make_result(action: TurnAction, salary: i32) -> TurnResult {
         TurnResult { dice: 3, new_position: 5, new_lap: 1, salary, action }
     }
@@ -62,6 +66,10 @@ mod tests {
     // ── 월급 분기 ─────────────────────────────────────────
     #[test]
     fn salary_positive() {
+        // 월급이 양수일 때:
+        // - 위치/랩 업데이트
+        // - 돈 증가
+        // - 입금 트랜잭션 기록
         let repo = MockRepo::new();
         let result = make_result(TurnAction::None, 20);
         apply_turn_result_with_repo(&repo, &dummy_conn(), 1, &result).unwrap();
@@ -74,6 +82,9 @@ mod tests {
 
     #[test]
     fn salary_zero() {
+        // 월급이 0일 때:
+        // - 위치/랩 업데이트만 수행
+        // - 돈 변화 및 트랜잭션 없음
         let repo = MockRepo::new();
         let result = make_result(TurnAction::None, 0);
         apply_turn_result_with_repo(&repo, &dummy_conn(), 1, &result).unwrap();
@@ -85,6 +96,10 @@ mod tests {
     // ── PayToll ───────────────────────────────────────────
     #[test]
     fn action_pay_toll() {
+        // 통행료 지불:
+        // - 플레이어 돈 감소
+        // - 소유자 돈 증가
+        // - 각각 출금/입금 트랜잭션 기록
         let repo = MockRepo::new();
         let result = make_result(TurnAction::PayToll { owner_id: 2, amount: 10 }, 0);
         apply_turn_result_with_repo(&repo, &dummy_conn(), 1, &result).unwrap();
@@ -98,6 +113,11 @@ mod tests {
     // ── Bankrupt ──────────────────────────────────────────
     #[test]
     fn action_bankrupt() {
+        // 파산 처리:
+        // - 남은 돈 상대에게 이전
+        // - 트랜잭션 기록
+        // - 소유권 초기화
+        // - 파산 상태 반영
         let repo = MockRepo::new();
         let result = make_result(TurnAction::Bankrupt { owner_id: 2, paid: 30 }, 0);
         apply_turn_result_with_repo(&repo, &dummy_conn(), 1, &result).unwrap();
@@ -113,6 +133,10 @@ mod tests {
     // ── EventWelfareFund ──────────────────────────────────
     #[test]
     fn action_welfare_fund() {
+        // 복지기금 납부:
+        // - 플레이어 돈 감소
+        // - 기금 증가
+        // - 출금 트랜잭션 기록
         let repo = MockRepo::new();
         let result = make_result(TurnAction::EventWelfareFund { amount: 40 }, 0);
         apply_turn_result_with_repo(&repo, &dummy_conn(), 1, &result).unwrap();
@@ -125,6 +149,11 @@ mod tests {
     // ── EventWelfareFundBankrupt ──────────────────────────
     #[test]
     fn action_welfare_fund_bankrupt() {
+        // 복지기금 내다가 파산:
+        // - 기금 증가
+        // - 출금 기록
+        // - 소유권 초기화
+        // - 파산 처리
         let repo = MockRepo::new();
         let result = make_result(TurnAction::EventWelfareFundBankrupt { paid: 25 }, 0);
         apply_turn_result_with_repo(&repo, &dummy_conn(), 1, &result).unwrap();
@@ -138,6 +167,8 @@ mod tests {
     // ── FundReceiveEmpty ──────────────────────────────────
     #[test]
     fn action_fund_receive_empty() {
+        // 기금 수령 이벤트인데 기금이 0:
+        // - 아무 일도 일어나지 않음 (위치 업데이트만)
         let repo = MockRepo::new();
         let result = make_result(TurnAction::FundReceiveEmpty, 0);
         apply_turn_result_with_repo(&repo, &dummy_conn(), 1, &result).unwrap();
@@ -148,6 +179,10 @@ mod tests {
     // ── EventFundReceive ──────────────────────────────────
     #[test]
     fn action_fund_receive() {
+        // 기금 수령:
+        // - 돈 증가
+        // - 입금 기록
+        // - 기금 초기화
         let repo = MockRepo::new();
         let result = make_result(TurnAction::EventFundReceive { amount: 300 }, 0);
         apply_turn_result_with_repo(&repo, &dummy_conn(), 1, &result).unwrap();
@@ -160,6 +195,8 @@ mod tests {
     // ── None ──────────────────────────────────────────────
     #[test]
     fn action_none() {
+        // 아무 액션 없음:
+        // - 위치/랩 업데이트만 수행
         let repo = MockRepo::new();
         let result = make_result(TurnAction::None, 0);
         apply_turn_result_with_repo(&repo, &dummy_conn(), 1, &result).unwrap();
@@ -169,6 +206,8 @@ mod tests {
     // ── EstateTaxSkipped ──────────────────────────────────
     #[test]
     fn action_estate_tax_skipped() {
+        // 재산세 스킵:
+        // - 아무 변화 없음 (위치 업데이트만)
         let repo = MockRepo::new();
         let result = make_result(TurnAction::EstateTaxSkipped, 0);
         apply_turn_result_with_repo(&repo, &dummy_conn(), 1, &result).unwrap();
@@ -178,6 +217,9 @@ mod tests {
     // ── EstateTax ─────────────────────────────────────────
     #[test]
     fn action_estate_tax() {
+        // 재산세 납부:
+        // - 돈 감소
+        // - 출금 트랜잭션 기록
         let repo = MockRepo::new();
         let result = make_result(TurnAction::EstateTax { amount: 60 }, 0);
         apply_turn_result_with_repo(&repo, &dummy_conn(), 1, &result).unwrap();
@@ -189,6 +231,11 @@ mod tests {
     // ── EstateTaxBankrupt ─────────────────────────────────
     #[test]
     fn action_estate_tax_bankrupt() {
+        // 재산세 내다가 파산:
+        // - 일부 금액 출금
+        // - 출금 기록
+        // - 소유권 초기화
+        // - 파산 처리
         let repo = MockRepo::new();
         let result = make_result(TurnAction::EstateTaxBankrupt { paid: 15 }, 0);
         apply_turn_result_with_repo(&repo, &dummy_conn(), 1, &result).unwrap();
