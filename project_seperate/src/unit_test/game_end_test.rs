@@ -11,7 +11,17 @@ mod tests {
     use crate::service::game_end_service::{check_game_end, Player};
 
     #[test]
-    fn test_all_bankrupt() {
+    fn test_empty_players() { // 에러 상황 검증: 플레이어 0명 상태
+        let result = check_game_end(vec![]);
+
+        assert!(result.is_finished);
+        assert!(result.winner_id.is_none());
+        assert!(result.rankings.is_empty());
+        assert!(result.rewards.is_empty());
+    }
+
+    #[test]
+    fn test_all_bankrupt() { // 플레이어는 존재하지만 전원 파산
         let players = vec![
             Player { id: 1, position: 0, money: 0, lap: 0, is_bankrupt: true },
         ];
