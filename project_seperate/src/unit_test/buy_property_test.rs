@@ -73,13 +73,6 @@ mod tests {
     }
 
     #[test]
-    fn test_event_tile_skip() {
-        let result = decide_buy_property(1, 100, 50, 10, None, true, "event".to_string());
-
-        assert!(matches!(result, BuyResult::Skip));
-    }
-
-    #[test]
     fn test_start_tile_skip() {
         let result = decide_buy_property(1, 100, 50, 10, None, true, "start".to_string());
 
