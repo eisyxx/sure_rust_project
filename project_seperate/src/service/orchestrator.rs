@@ -141,9 +141,6 @@ impl TurnRepo for TurnRepoImpl {
     fn get_active_game_players(&self, conn: &Connection) -> rusqlite::Result<Vec<GamePlayer>> {
         get_active_game_players(conn)
     }
-    fn get_active_players(&self, conn: &Connection) -> rusqlite::Result<Vec<GamePlayer>> {
-        get_active_game_players(conn)
-    }
     fn get_player_states(&self, conn: &Connection) -> rusqlite::Result<Vec<PlayerState>> {
         get_player_states(conn)
     }
@@ -315,7 +312,7 @@ pub fn process_turn_with_repo<R: TurnRepo, D: TurnServiceDeps>(repo: &R, deps: &
         tile_owner,
         &tile_type,
     );
-    apply_turn_result(conn, player_id, &turn_result)?;
+    repo.apply_turn_result(conn, player_id, &turn_result)?;
 
     let bankrupt_occurred = turn_result.action.is_bankrupt();
     advance_turn(conn, session, bankrupt_occurred)?;
@@ -345,8 +342,19 @@ pub fn process_turn_with_repo<R: TurnRepo, D: TurnServiceDeps>(repo: &R, deps: &
     })
 }
 
-/// 구매 결정 처리
+/// 구매 결정 처리 (테스트 용)
 pub fn process_decide(
+    conn: &Connection,
+    session: &mut SessionState,
+    will_buy: bool,
+) -> rusqlite::Result<TurnOutcome> {
+    let repo = TurnRepoImpl;
+    process_decide_with_repo(&repo, conn, session, will_buy)
+}
+
+/// 구매 결정 처리
+pub fn process_decide_with_repo<R: TurnRepo>(
+    repo: &R,
     conn: &Connection,
     session: &mut SessionState,
     will_buy: bool,
@@ -368,7 +376,7 @@ pub fn process_decide(
 
     let (action_type, action_amount) = match &buy_result {
         BuyResult::Purchase { price } => {
-            apply_purchase(conn, pending.player_id, pending.new_position, *price)?;
+            repo.apply_purchase(conn, pending.player_id, pending.new_position, *price)?;
             ("purchase", *price)
         }
         _ => ("skip", 0),
