@@ -12,13 +12,14 @@ pub fn move_player(
     total_tiles: i32,
 ) -> MoveResult {
 
-    let mut new_position = position + dice;
-    let mut new_lap = lap;
+    let raw_position = position + dice;
 
-    if new_position >= total_tiles {
-        new_position %= total_tiles;
+    let mut new_lap = lap;
+    if raw_position >= total_tiles {
         new_lap += 1;
     }
+
+    let new_position = ((raw_position % total_tiles) + total_tiles) % total_tiles;
 
     MoveResult {
         new_position,
