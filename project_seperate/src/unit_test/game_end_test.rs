@@ -10,8 +10,9 @@
 mod tests {
     use crate::service::game_end_service::{check_game_end, Player};
 
+    // 플레이어 0명 상태
     #[test]
-    fn test_empty_players() { // 에러 상황 검증: 플레이어 0명 상태
+    fn test_empty_players() { 
         let result = check_game_end(vec![]);
 
         assert!(result.is_finished);
@@ -20,8 +21,9 @@ mod tests {
         assert!(result.rewards.is_empty());
     }
 
+    // 플레이어는 존재하지만 전원 파산
     #[test]
-    fn test_all_bankrupt() { // 플레이어는 존재하지만 전원 파산
+    fn test_all_bankrupt() { 
         let players = vec![
             Player { id: 1, position: 0, money: 0, lap: 0, is_bankrupt: true },
         ];
@@ -34,6 +36,7 @@ mod tests {
         assert!(result.rewards.is_empty());
     }
 
+    // 한 명만 생존
     #[test]
     fn test_single_winner() {
         let players = vec![
@@ -48,6 +51,7 @@ mod tests {
         assert_eq!(result.rewards, vec![(1, 150)]);
     }
 
+    // 3바퀴 이상 → 게임 종료 + 파산자 포함 랭킹
     #[test]
     fn test_finished_with_some_bankrupt_players() {
         let players = vec![
@@ -68,6 +72,7 @@ mod tests {
         assert_eq!(result.rewards, vec![(1, 150), (2, 120)]);
     }
 
+    // 3바퀴 미만 → 게임 계속
     #[test]
     fn test_not_finished() {
         let players = vec![
@@ -83,6 +88,7 @@ mod tests {
         assert!(result.rewards.is_empty());
     }
 
+    // 3바퀴 이상, 파산자 없음 → 게임 종료 + 랭킹/보상 계산
     #[test]
     fn test_finished_all_lapped() {
         let players = vec![

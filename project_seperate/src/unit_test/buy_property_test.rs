@@ -12,6 +12,7 @@ tile_type == "start" → Skip
 mod tests {
     use crate::service::buy_property_service::{decide_buy_property, is_purchasable_tile, BuyResult};
 
+    // owner 있음 + 돈 충분 → PayToll
     #[test]
     fn test_pay_toll() {
         let result = decide_buy_property(1, 100, 50, 20, Some(2), false, "land".to_string());
@@ -25,6 +26,7 @@ mod tests {
         }
     }
 
+    // owner 있음 + 소유자 본인 → Skip
     #[test]
     fn test_owner_is_self_should_skip() {
         let player_id = 1;
@@ -33,7 +35,8 @@ mod tests {
 
         assert!(matches!(result, BuyResult::Skip));
     }
-
+    
+    // owner 있음 + 돈 부족 → Bankrupt
     #[test]
     fn test_bankrupt() {
         let result = decide_buy_property(1, 10, 50, 20, Some(2), false, "land".to_string());
@@ -47,13 +50,15 @@ mod tests {
         }
     }
 
+    // owner 없음 + 구매 안함 → Skip
     #[test]
     fn test_skip() {
         let result = decide_buy_property(1, 100, 50, 10, None, false, "land".to_string());
 
         assert!(matches!(result, BuyResult::Skip));
     }
-
+    
+    // owner 없음 + 구매 함 → Purchase
     #[test]
     fn test_purchase() {
         let result = decide_buy_property(1, 100, 50, 10, None, true, "land".to_string());
@@ -64,13 +69,15 @@ mod tests {
         }
     }
 
+    // owner 없음 + 돈 부족 → NotEnoughMoney
     #[test]
     fn test_not_enough_money() {
         let result = decide_buy_property(1, 10, 50, 10, None, true, "land".to_string());
 
         assert!(matches!(result, BuyResult::NotEnoughMoney));
     }
-
+    
+    // tile_type == "start" → Skip
     #[test]
     fn test_start_tile_skip() {
         let result = decide_buy_property(1, 100, 50, 10, None, true, "start".to_string());
@@ -78,28 +85,31 @@ mod tests {
         assert!(matches!(result, BuyResult::Skip));
     }
 
-    // --- is_purchasable_tile tests ---
-
+    // owner 없음 + 구매 가능 조건 충족 (price > 0, land 타입)
     #[test]
     fn test_purchasable_tile_true() {
         assert!(is_purchasable_tile(None, "land", 50));
     }
-
+    
+    // owner 있음 → 구매 불가
     #[test]
     fn test_purchasable_tile_has_owner() {
         assert!(!is_purchasable_tile(Some(1), "land", 50));
     }
 
+    // tile_type == "event" → 구매 불가
     #[test]
     fn test_purchasable_tile_event() {
         assert!(!is_purchasable_tile(None, "event", 50));
     }
 
+    // tile_type == "start" → 구매 불가
     #[test]
     fn test_purchasable_tile_start() {
         assert!(!is_purchasable_tile(None, "start", 50));
     }
 
+    // price == 0 → 구매 불가
     #[test]
     fn test_purchasable_tile_zero_price() {
         assert!(!is_purchasable_tile(None, "land", 0));

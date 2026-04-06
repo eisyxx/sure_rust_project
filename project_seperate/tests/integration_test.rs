@@ -1,7 +1,4 @@
-/// turn_service의 roll_and_move 실행 안됨
-/// turn_service의 match deps.handle_event -> EventResult::None => TurnAction::None 실행 안됨
-/// 
-
+/// 통합 테스트
 
 #[cfg(test)]
 mod integration_tests {
@@ -52,7 +49,7 @@ mod integration_tests {
             }
             turn_count += 1;
         }
-        assert!(session.game_finished || turn_count == 200); //게임이 종료 상태여야 함
+        assert!(session.game_finished || turn_count == 200); // 게임이 종료 상태여야 함
 
         let state = get_state(&conn, &session).unwrap();
 
@@ -156,7 +153,7 @@ mod integration_tests {
         use project::service::orchestrator;
         use project::repository::transcaction_repo::record_transaction;
 
-        // DB 초기화 (여기서 초기자금 transaction 생성됨)
+        // DB 초기화 (초기자금 transaction 생성)
         let (conn, _session) = setup();
 
         let player_id = 1;

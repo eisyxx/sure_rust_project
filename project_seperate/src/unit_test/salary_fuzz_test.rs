@@ -1,8 +1,14 @@
+/*
+-fuzz testing-
+랜덤 lap 변화와 salary 입력에 대해 calculate_salary의 핵심 규칙(invariant)을 검증
+*/
+
 #[cfg(test)]
 mod fuzz_calculate_salary {
     use proptest::prelude::*;
     use crate::service::salary_service::calculate_salary;
 
+    // 랜덤 lap 변화와 salary 입력에 대해 calculate_salary의 핵심 규칙(invariant)을 검증
     proptest! {
         #[test]
         fn fuzz_calculate_salary(
