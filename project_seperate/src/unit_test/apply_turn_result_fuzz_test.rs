@@ -1,4 +1,7 @@
-/// 랜덤한 게임 상황(action)에서 DB 상태가 깨지지 않는지 검증
+/*
+-fuzz testing-
+랜덤한 게임 상황(action)에서 DB 상태가 깨지지 않는지 검증
+*/
 
 #[cfg(test)]
 mod fuzz_apply_turn_result {
@@ -65,6 +68,7 @@ mod fuzz_apply_turn_result {
         ]
     }
 
+    // 랜덤한 게임 상황(action)에서 DB 상태가 깨지지 않는지 검증
     proptest! {
         #[test]
         fn fuzz_apply_turn_result(

@@ -1,3 +1,9 @@
+/*
+-fuzz testing-
+게임 규칙 보장(플레이어 위치, 주사위 값, lap)하는 입력 테스트
+게임 규칙 밖의 비정상 입력에 대한 처리 테스트
+*/
+
 #[cfg(test)]
 mod fuzz_move_player {
     use proptest::prelude::*;
@@ -33,7 +39,7 @@ mod fuzz_move_player {
             }
         }
 
-        // 게임 규칙 외 비정상 입력 테스트
+        // 게임 규칙 밖의 비정상 입력 테스트
         #[test]
         fn fuzz_move_player(
             position in -100i32..100,
