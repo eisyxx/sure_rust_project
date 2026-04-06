@@ -176,94 +176,63 @@ mod fuzz_tests {
                 prop_assert!(money <= 0);
             }
         }
-    }
-}
 
-/// API (turn, decide)를 랜덤한 순서로 호출
-#[cfg(test)]
-mod state_machine_fuzz {
-    use proptest::prelude::*;
-    use rusqlite::Connection;
-
-    use project::service::orchestrator::*;
-    use project::service::traits::TurnServiceDeps;
-    use project::service::event_service::EventResult;
-
-    struct MockDeps {
-        dice: i32,
-    }
-
-    impl TurnServiceDeps for MockDeps {
-        fn roll_dice(&self) -> i32 {
-            self.dice
-        }
-
-        fn handle_event(
-            &self,
-            _conn: &Connection,
-            _player_id: i32,
-            _tile_id: i32,
-        ) -> EventResult {
-            EventResult::None
-        }
-    }
-
-    proptest! {
+        /// API (turn, decide)를 랜덤한 순서로 호출
         #[test]
-        fn fuzz_state_machine(
-            actions in prop::collection::vec(0u8..3, 1..50), // 0: turn, 1: decide(true), 2: decide(false)
-            dice in 1i32..=6,
-        ) {
-            let conn = Connection::open_in_memory().unwrap();
-            let mut session = init_session(&conn).unwrap();
+            fn fuzz_state_machine(
+                actions in prop::collection::vec(0u8..3, 1..50), // 0: turn, 1: decide(true), 2: decide(false)
+                dice in 1i32..=6,
+            ) {
+                let conn = Connection::open_in_memory().unwrap();
+                let mut session = init_session(&conn).unwrap();
 
-            let repo = TurnRepoImpl;
-            let deps = MockDeps { dice };
+                let repo = TurnRepoImpl;
+                let deps = MockDeps { dice };
 
-            for action in actions {
-                match action {
-                    // turn 호출
-                    0 => {
-                        let _ = process_turn_with_repo(&repo, &deps, &conn, &mut session);
+                for action in actions {
+                    match action {
+                        // turn 호출
+                        0 => {
+                            let _ = process_turn_with_repo(&repo, &deps, &conn, &mut session);
+                        }
+
+                        // decide(true)
+                        1 => {
+                            let _ = process_decide(&conn, &mut session, true);
+                        }
+
+                        // decide(false)
+                        2 => {
+                            let _ = process_decide(&conn, &mut session, false);
+                        }
+
+                        _ => unreachable!(),
                     }
 
-                    // decide(true)
-                    1 => {
-                        let _ = process_decide(&conn, &mut session, true);
+
+                    // 1. 게임 끝났으면 pending 없어야 함
+                    if session.game_finished {
+                        prop_assert!(session.pending.is_none());
                     }
 
-                    // decide(false)
-                    2 => {
-                        let _ = process_decide(&conn, &mut session, false);
+                    // 2. pending 있으면 turn 호출하면 안 됨 (또는 안전해야 함)
+                    if session.pending.is_some() {
+                        // 여기서는 "죽지 않는 것"만 체크
+                        prop_assert!(true);
                     }
 
-                    _ => unreachable!(),
+                    // 3. current_turn_index 범위
+                    prop_assert!(session.current_turn_index >= 0);
+
+                    // 4. DB 상태 체크
+                    let count: i32 = conn.query_row(
+                        "SELECT COUNT(*) FROM players",
+                        [],
+                        |r| r.get(0),
+                    ).unwrap();
+
+                    prop_assert!(count > 0);
                 }
-
-
-                // 1. 게임 끝났으면 pending 없어야 함
-                if session.game_finished {
-                    prop_assert!(session.pending.is_none());
-                }
-
-                // 2. pending 있으면 turn 호출하면 안 됨 (또는 안전해야 함)
-                if session.pending.is_some() {
-                    // 여기서는 "죽지 않는 것"만 체크
-                    prop_assert!(true);
-                }
-
-                // 3. current_turn_index 범위
-                prop_assert!(session.current_turn_index >= 0);
-
-                // 4. DB 상태 체크
-                let count: i32 = conn.query_row(
-                    "SELECT COUNT(*) FROM players",
-                    [],
-                    |r| r.get(0),
-                ).unwrap();
-
-                prop_assert!(count > 0);
             }
         }
-    }
 }

@@ -5,7 +5,6 @@ owner 있음 + 돈 부족 → Bankrupt
 owner 없음 + 구매 안함 → Skip
 owner 없음 + 구매 함 → Purchase
 owner 없음 + 돈 부족 → NotEnoughMoney
-tile_type == "event" → Skip
 tile_type == "start" → Skip
 */
 

@@ -532,7 +532,7 @@ function showTurnMessage(result) {
   }
 
   if (result.action_type === "estate_tax") {
-    messages.push("토지 구매 금액이 100만원을 초과하여 종합부동산세 30만원을 납부합니다.");
+    messages.push("보유한 토지 가치가 100만원을 초과하여 종합부동산세 30만원을 납부합니다.");
   }
 
   if (result.action_type === "estate_tax_bankrupt") {
@@ -540,7 +540,7 @@ function showTurnMessage(result) {
   }
 
   if (result.action_type === "estate_tax_skipped") {
-    messages.push("부동산세금 조건이 충족되지 않았습니다.");
+    messages.push("종합부동산세 부과 조건이 충족되지 않았습니다.");
   }
 
   if (result.action_type === "welfare_fund") {

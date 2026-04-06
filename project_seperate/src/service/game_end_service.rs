@@ -26,29 +26,16 @@ pub fn check_game_end(players: Vec<Player>) -> GameResult {
         .cloned()
         .collect();
 
-    if active_players.is_empty() {
-        return GameResult {
-            is_finished: true,
-            winner_id: None,
-            rankings: vec![],
-            rewards: vec![],
-        };
-    }
+    // 종료 여부 판단
+    let is_finished = if active_players.is_empty() {
+        true
+    } else if active_players.len() == 1 {
+        true
+    } else {
+        active_players.iter().all(|p| p.lap >= 3)
+    };
 
-    if active_players.len() == 1 {
-        let winner = &active_players[0];
-        return GameResult {
-            is_finished: true,
-            winner_id: Some(winner.id),
-            rankings: vec![(winner.id, winner.money)],
-            rewards: vec![(winner.id, 150)],
-        };
-    }
-
-    // 모든 생존 플레이어가 3바퀴 이상 돌았을 때 종료
-    let finished = active_players.iter().all(|p| p.lap >= 3);
-
-    if !finished {
+    if !is_finished {
         return GameResult {
             is_finished: false,
             winner_id: None,
@@ -57,41 +44,55 @@ pub fn check_game_end(players: Vec<Player>) -> GameResult {
         };
     }
 
-    // 보상 대상: lap 내림차순 정렬 후 상위 3명에게 150/120/80
-    let mut sorted_for_reward = active_players.clone();
-    sorted_for_reward.sort_by(|a, b| b.lap.cmp(&a.lap));
-    let reward_amounts = [150, 120, 80];
-    let rewards: Vec<(i32, i32)> = sorted_for_reward
-        .iter()
-        .enumerate()
-        .filter(|(i, _)| *i < reward_amounts.len())
-        .map(|(i, p)| (p.id, reward_amounts[i]))
-        .collect();
+    // 보상 계산 (생존자 기준)
+    let mut rewards: Vec<(i32, i32)> = vec![];
 
-    // 랭킹: 보상 반영 후 돈 기준 (파산자는 -1)
+    if active_players.len() == 1 {
+        // 생존자 1명 → 150 지급
+        rewards.push((active_players[0].id, 150));
+    } else if !active_players.is_empty() {
+        // 일반 케이스 → lap 기준 상위 3명
+        let mut sorted_for_reward = active_players.clone();
+        sorted_for_reward.sort_by(|a, b| b.lap.cmp(&a.lap));
+
+        let reward_amounts = [150, 120, 80];
+
+        rewards = sorted_for_reward
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i < reward_amounts.len())
+            .map(|(i, p)| (p.id, reward_amounts[i]))
+            .collect();
+    }
+
+    // 랭킹 계산 (항상 전체 플레이어 기준)
     let mut rankings: Vec<(i32, i32)> = players
         .iter()
         .map(|p| {
             if p.is_bankrupt {
                 (p.id, -1)
             } else {
-                let bonus = rewards.iter()
+                let bonus = rewards
+                    .iter()
                     .find(|(rid, _)| *rid == p.id)
                     .map(|(_, amt)| *amt)
                     .unwrap_or(0);
+
                 (p.id, p.money + bonus)
             }
         })
         .collect();
+
     rankings.sort_by(|a, b| b.1.cmp(&a.1));
 
+    // winner 계산 (항상 rankings 기준)
     let winner_id = rankings
         .iter()
         .find(|(_, money)| *money != -1)
         .map(|(id, _)| *id);
 
     GameResult {
-        is_finished: finished,
+        is_finished: true,
         winner_id,
         rankings,
         rewards,
