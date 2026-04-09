@@ -2,6 +2,8 @@
 mod tests {
     use std::cell::RefCell;
     use rusqlite::Connection;
+    use rusqlite::Error;
+
     use crate::service::turn_execute_service::apply_turn_result_with_repo;
     use crate::service::turn_service::{TurnAction, TurnResult};
     use crate::service::traits::TurnExecuteRepo;
@@ -10,11 +12,22 @@ mod tests {
     // DB 대신 호출 기록을 남기는 Mock Repo
     struct MockRepo {
         calls: RefCell<Vec<String>>,
+        fail_at: Option<&'static str>, // 🔥 어디서 실패할지 지정
     }
 
     impl MockRepo {
         fn new() -> Self {
-            Self { calls: RefCell::new(Vec::new()) }
+            Self { calls: RefCell::new(Vec::new()), fail_at: None }
+        }
+        fn fail_at(point: &'static str) -> Self {
+            Self {
+                calls: RefCell::new(Vec::new()),
+                fail_at: Some(point),
+            }
+        }
+
+        fn should_fail(&self, point: &str) -> bool {
+            self.fail_at == Some(point)
         }
         fn calls(&self) -> Vec<String> {
             self.calls.borrow().clone()
@@ -24,30 +37,56 @@ mod tests {
     // 실제 DB 작업 대신 어떤 함수가 호출됐는지만 기록
     impl TurnExecuteRepo for MockRepo {
         fn update_position_and_lap(&self, _conn: &Connection, player_id: i32, pos: i32, lap: i32) -> rusqlite::Result<()> {
+            if self.should_fail("update_position_and_lap") {
+                return Err(Error::InvalidQuery);
+            }
             self.calls.borrow_mut().push(format!("update_pos_lap({},{},{})", player_id, pos, lap));
             Ok(())
         }
-        fn update_money(&self, _conn: &Connection, player_id: i32, delta: i32) -> rusqlite::Result<()> {
+        fn update_money(&self, _: &Connection, player_id: i32, delta: i32) -> rusqlite::Result<()> {
+            if self.should_fail("update_money") {
+                return Err(Error::InvalidQuery);
+            }
             self.calls.borrow_mut().push(format!("update_money({},{})", player_id, delta));
             Ok(())
         }
-        fn record_transaction(&self, _conn: &Connection, player_id: i32, tx_type: &str, amount: i32, target: &str) -> rusqlite::Result<()> {
+
+        fn record_transaction(&self, _: &Connection, player_id: i32, tx_type: &str, amount: i32, target: &str) -> rusqlite::Result<()> {
+            if self.should_fail("record_transaction") {
+                return Err(Error::InvalidQuery);
+            }
             self.calls.borrow_mut().push(format!("record_tx({},{},{},{})", player_id, tx_type, amount, target));
             Ok(())
         }
-        fn reset_owner_for_player(&self, _conn: &Connection, player_id: i32) -> rusqlite::Result<()> {
+
+        fn reset_owner_for_player(&self, _: &Connection, player_id: i32) -> rusqlite::Result<()> {
+            if self.should_fail("reset_owner") {
+                return Err(Error::InvalidQuery);
+            }
             self.calls.borrow_mut().push(format!("reset_owner({})", player_id));
             Ok(())
         }
-        fn bankrupt(&self, _conn: &Connection, player_id: i32) -> rusqlite::Result<()> {
+
+        fn bankrupt(&self, _: &Connection, player_id: i32) -> rusqlite::Result<()> {
+            if self.should_fail("bankrupt") {
+                return Err(Error::InvalidQuery);
+            }
             self.calls.borrow_mut().push(format!("bankrupt({})", player_id));
             Ok(())
         }
-        fn add_fund(&self, _conn: &Connection, amount: i32) -> rusqlite::Result<()> {
+
+        fn add_fund(&self, _: &Connection, amount: i32) -> rusqlite::Result<()> {
+            if self.should_fail("add_fund") {
+                return Err(Error::InvalidQuery);
+            }
             self.calls.borrow_mut().push(format!("add_fund({})", amount));
             Ok(())
         }
-        fn reset_fund(&self, _conn: &Connection) -> rusqlite::Result<()> {
+
+        fn reset_fund(&self, _: &Connection) -> rusqlite::Result<()> {
+            if self.should_fail("reset_fund") {
+                return Err(Error::InvalidQuery);
+            }
             self.calls.borrow_mut().push("reset_fund".to_string());
             Ok(())
         }
@@ -245,4 +284,113 @@ mod tests {
         assert!(calls.contains(&"reset_owner(1)".to_string()));
         assert!(calls.contains(&"bankrupt(1)".to_string()));
     }
+
+    // ── DB 실패 시나리오 ──────────────────────────────────────
+    #[test]
+    fn test_fail_at_update_position_and_lap() {
+        let repo = MockRepo::fail_at("update_position_and_lap");
+        let conn = dummy_conn();
+        let result = make_result(TurnAction::None, 100);
+
+        let res = apply_turn_result_with_repo(&repo, &conn, 1, &result);
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_fail_at_update_money() {
+        let repo = MockRepo::fail_at("update_money"); 
+        let conn = dummy_conn();
+
+        let result = make_result(
+            TurnAction::PayToll { owner_id: 2, amount: 50 },
+            0,
+        );
+
+        let res = apply_turn_result_with_repo(&repo, &conn, 1, &result);
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_fail_at_record_transaction() {
+        let repo = MockRepo::fail_at("record_transaction"); 
+        let conn = dummy_conn();
+        let result = make_result(TurnAction::None, 100);
+
+        let res = apply_turn_result_with_repo(&repo, &conn, 1, &result);
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_fail_record_transaction_in_pay_toll_owner_deposit() {
+        let repo = MockRepo::fail_at("record_transaction");
+        let conn = dummy_conn();
+
+        let result = make_result(
+            TurnAction::PayToll {
+                owner_id: 2,
+                amount: 50,
+            },
+            0, // 🔥 salary 꺼서 위쪽 record_transaction 안 타게
+        );
+
+        let res = apply_turn_result_with_repo(&repo, &conn, 1, &result);
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_fail_record_transaction_in_bankrupt_player_withdraw() {
+        let repo = MockRepo::fail_at("record_transaction");
+        let conn = dummy_conn();
+
+        let result = make_result(
+            TurnAction::Bankrupt {
+                owner_id: 2,
+                paid: 30,
+            },
+            0,
+        );
+
+        let res = apply_turn_result_with_repo(&repo, &conn, 1, &result);
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_fail_welfare_fund() {
+        let repo = MockRepo::fail_at("record_transaction");
+        let conn = dummy_conn();
+
+        let result = make_result(
+            TurnAction::EventWelfareFund {
+                amount: 40,
+            },
+            0,
+        );
+
+        let res = apply_turn_result_with_repo(&repo, &conn, 1, &result);
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_fail_welfare_fund_bankrupt() {
+        let repo = MockRepo::fail_at("record_transaction");
+        let conn = dummy_conn();
+
+        let result = make_result(
+            TurnAction::EventWelfareFundBankrupt {
+                paid: 25,
+            },
+            0,
+        );
+
+        let res = apply_turn_result_with_repo(&repo, &conn, 1, &result);
+
+        assert!(res.is_err());
+    }
+    
 }
