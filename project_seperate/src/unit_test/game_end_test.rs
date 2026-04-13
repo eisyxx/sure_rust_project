@@ -105,3 +105,148 @@ mod tests {
         assert_eq!(result.rankings[1], (1, 250));
     }
 }
+
+#[cfg(test)]
+mod db_tests {
+    use rusqlite::{params, Connection};
+    use crate::service::game_end_service::{apply_rewards, evaluate_and_apply_game_end};
+
+    fn setup_test_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "
+            CREATE TABLE event_tiles (
+                tile_id INTEGER PRIMARY KEY,
+                event_type TEXT NOT NULL,
+                amount INTEGER NOT NULL
+            );
+
+            -- player_repo.rs에서 사용하는 컬럼 반영
+            CREATE TABLE players (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                money INTEGER NOT NULL,
+                lap INTEGER NOT NULL,
+                turn_order INTEGER NOT NULL,
+                is_bankrupt INTEGER NOT NULL
+            );
+
+            CREATE TABLE properties (
+                tile_id INTEGER PRIMARY KEY,
+                owner_id INTEGER,
+                price INTEGER NOT NULL
+            );
+
+            CREATE TABLE fund (
+                amount INTEGER NOT NULL
+            );
+
+            -- transcaction_repo.rs의 INSERT/SELECT 컬럼에 맞춤
+            CREATE TABLE transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                amount INTEGER NOT NULL,
+                target TEXT NOT NULL,
+                balance_before INTEGER,
+                balance_after INTEGER,
+                created_at TEXT NOT NULL
+            );
+            "
+        ).unwrap();
+        conn
+    }
+
+    #[test]
+    fn test_apply_rewards_updates_money_and_records_transactions() {
+        let conn = setup_test_db();
+
+        conn.execute(
+            "INSERT INTO players (id, name, position, money, lap, turn_order, is_bankrupt)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![1, "p1", 0, 100, 0, 1, 0],
+        ).unwrap();
+
+        conn.execute(
+            "INSERT INTO players (id, name, position, money, lap, turn_order, is_bankrupt)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![2, "p2", 0, 200, 0, 2, 0],
+        ).unwrap();
+
+        apply_rewards(&conn, &[(1, 150), (2, 120)]).unwrap();
+
+        let p1: i32 = conn.query_row("SELECT money FROM players WHERE id = 1", [], |r| r.get(0)).unwrap();
+        let p2: i32 = conn.query_row("SELECT money FROM players WHERE id = 2", [], |r| r.get(0)).unwrap();
+        assert_eq!(p1, 250);
+        assert_eq!(p2, 320);
+
+        let tx_count: i32 = conn.query_row("SELECT COUNT(*) FROM transactions", [], |r| r.get(0)).unwrap();
+        assert_eq!(tx_count, 2);
+    }
+
+    #[test]
+    fn test_evaluate_and_apply_game_end_finished() {
+        let conn = setup_test_db();
+
+        conn.execute(
+            "INSERT INTO players (id, name, position, money, lap, turn_order, is_bankrupt)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![1, "p1", 0, 100, 3, 1, 0],
+        ).unwrap();
+
+        conn.execute(
+            "INSERT INTO players (id, name, position, money, lap, turn_order, is_bankrupt)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![2, "p2", 0, 200, 3, 2, 0],
+        ).unwrap();
+
+        let result = evaluate_and_apply_game_end(&conn).unwrap();
+
+        assert!(result.game_finished);
+        assert_eq!(result.winner_id, Some(2));
+
+        let rankings = result.rankings.expect("rankings should exist when finished");
+        assert_eq!(rankings[0], (2, 320));
+        assert_eq!(rankings[1], (1, 250));
+
+        let p1: i32 = conn.query_row("SELECT money FROM players WHERE id = 1", [], |r| r.get(0)).unwrap();
+        let p2: i32 = conn.query_row("SELECT money FROM players WHERE id = 2", [], |r| r.get(0)).unwrap();
+        assert_eq!(p1, 250);
+        assert_eq!(p2, 320);
+
+        let tx_count: i32 = conn.query_row("SELECT COUNT(*) FROM transactions", [], |r| r.get(0)).unwrap();
+        assert_eq!(tx_count, 2);
+    }
+
+    #[test]
+    fn test_evaluate_and_apply_game_end_not_finished() {
+        let conn = setup_test_db();
+
+        conn.execute(
+            "INSERT INTO players (id, name, position, money, lap, turn_order, is_bankrupt)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![1, "p1", 0, 100, 2, 1, 0],
+        ).unwrap();
+
+        conn.execute(
+            "INSERT INTO players (id, name, position, money, lap, turn_order, is_bankrupt)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![2, "p2", 0, 200, 2, 2, 0],
+        ).unwrap();
+
+        let result = evaluate_and_apply_game_end(&conn).unwrap();
+
+        assert!(!result.game_finished);
+        assert_eq!(result.winner_id, None);
+        assert!(result.rankings.is_none());
+
+        let p1: i32 = conn.query_row("SELECT money FROM players WHERE id = 1", [], |r| r.get(0)).unwrap();
+        let p2: i32 = conn.query_row("SELECT money FROM players WHERE id = 2", [], |r| r.get(0)).unwrap();
+        assert_eq!(p1, 100);
+        assert_eq!(p2, 200);
+
+        let tx_count: i32 = conn.query_row("SELECT COUNT(*) FROM transactions", [], |r| r.get(0)).unwrap();
+        assert_eq!(tx_count, 0);
+    }
+}

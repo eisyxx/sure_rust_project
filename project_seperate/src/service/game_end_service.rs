@@ -118,9 +118,7 @@ pub fn apply_rewards(conn: &Connection, rewards: &[(i32, i32)]) -> rusqlite::Res
 }
 
 /// 턴 종료 후 게임 종료 여부를 판단하고, 종료 시 보상까지 DB에 반영하는 서비스 함수.
-///
-/// DB에서 전체 플레이어를 조회 → 게임 종료 조건 확인 → 종료 시 보상 반영을
-/// 한 번의 호출로 처리한다.
+/// DB에서 전체 플레이어를 조회 → 게임 종료 조건 확인 → 종료 시 보상 반영을 한 번의 호출로 처리한다.
 pub struct AdvanceTurnResult {
     pub game_finished: bool,
     pub winner_id: Option<i32>,

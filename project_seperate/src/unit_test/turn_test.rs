@@ -6,6 +6,7 @@ mod tests {
         build_turn_result_with_deps, roll_and_move_with_deps,
         resolve_current_player_id_with_repo,
         MoveStep, TurnAction,
+        build_landing_context, get_active_game_players,
     };
     use crate::service::traits::{TurnServiceDeps, PlayerStateRepo};
     use crate::repository::player_repo::PlayerState;
@@ -371,4 +372,109 @@ mod tests {
         assert!(c.is_bankrupt());
         assert!(!d.is_bankrupt());
     }
+
+    fn setup_test_db_for_landing_context() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "
+            CREATE TABLE tiles (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                price INTEGER NOT NULL,
+                toll INTEGER NOT NULL,
+                type TEXT NOT NULL
+            );
+
+            CREATE TABLE properties (
+                tile_id INTEGER PRIMARY KEY,
+                owner_id INTEGER,
+                price INTEGER NOT NULL
+            );
+            "
+        ).unwrap();
+        conn
+    }
+
+    #[test]
+    fn test_build_landing_context_normal_lookup() {
+        let conn = setup_test_db_for_landing_context();
+
+        conn.execute(
+            "INSERT INTO tiles (id, name, price, toll, type) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![7, "Seoul", 300, 30, "land"],
+        ).unwrap();
+
+        conn.execute(
+            "INSERT INTO properties (tile_id, owner_id, price) VALUES (?1, ?2, ?3)",
+            rusqlite::params![7, 2, 300],
+        ).unwrap();
+
+        let ctx = build_landing_context(&conn, 7, 100, 20);
+
+        assert_eq!(ctx.tile_price, 300);
+        assert_eq!(ctx.tile_toll, 30);
+        assert_eq!(ctx.tile_owner, Some(2));
+        assert_eq!(ctx.tile_type, "land");
+        assert_eq!(ctx.money_after_salary, 120);
+    }
+
+    #[test]
+    fn test_build_landing_context_fallback_coverage() {
+        // tile/properties 테이블이 없어도 unwrap_or 기본값 경로를 타면서 함수 커버 가능
+        let conn = Connection::open_in_memory().unwrap();
+
+        let ctx = build_landing_context(&conn, 7, 100, 20);
+
+        assert_eq!(ctx.tile_price, 0);
+        assert_eq!(ctx.tile_toll, 0);
+        assert_eq!(ctx.tile_owner, None);
+        assert_eq!(ctx.tile_type, "unknown");
+        assert_eq!(ctx.money_after_salary, 120);
+    }
+
+
+    fn setup_test_db_for_players() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "
+            CREATE TABLE players (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                money INTEGER NOT NULL,
+                lap INTEGER NOT NULL,
+                turn_order INTEGER NOT NULL,
+                is_bankrupt INTEGER NOT NULL
+            );
+            "
+        ).unwrap();
+        conn
+    }
+
+    #[test]
+    fn test_get_active_game_players_filters_bankrupt() {
+        let conn = setup_test_db_for_players();
+
+        conn.execute(
+            "INSERT INTO players (id, name, position, money, lap, turn_order, is_bankrupt)
+            VALUES (1, 'p1', 3, 150, 1, 1, 0)",
+            [],
+        ).unwrap();
+
+        conn.execute(
+            "INSERT INTO players (id, name, position, money, lap, turn_order, is_bankrupt)
+            VALUES (2, 'p2', 5, 0, 0, 2, 1)",
+            [],
+        ).unwrap();
+
+        let active = get_active_game_players(&conn).unwrap();
+
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].id, 1);
+        assert_eq!(active[0].position, 3);
+        assert_eq!(active[0].money, 150);
+        assert_eq!(active[0].lap, 1);
+        assert!(!active[0].is_bankrupt);
+    }
+
 }
