@@ -8,7 +8,7 @@ use crate::repository::{
 };
 
 use crate::service::{
-    event_service::{handle_event, EventResult},
+    event_service::{handle_event_with_repo, EventResult},
     roll_dice_service::roll_dice,
     traits::{EventServiceRepo, PlayerStateRepo, TurnExecuteRepo, TurnServiceDeps, TurnServiceQueryRepo},
 };
@@ -53,7 +53,7 @@ impl TurnServiceDeps for PortImpl {
     }
 
     fn handle_event(&self, conn: &Connection, player_id: i32, tile_id: i32) -> EventResult {
-        handle_event(conn, player_id, tile_id)
+        handle_event_with_repo(self, conn, player_id, tile_id)
     }
 }
 

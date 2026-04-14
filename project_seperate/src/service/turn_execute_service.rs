@@ -8,7 +8,6 @@ use crate::repository::{
 
 use crate::service::turn_service::{TurnResult, TurnAction};
 use crate::service::traits::TurnExecuteRepo;
-use crate::service::port_impl::PortImpl;
 
 
 // process_turn 함수 실행 결과를 DB에 반영하는 함수 (DI 버전)
@@ -180,14 +179,6 @@ pub fn apply_turn_result_with_repo<R: TurnExecuteRepo>(
     Ok(())
 }
 
-// process_turn 함수 실행 결과를 DB에 반영하는 함수
-pub fn apply_turn_result(
-    conn: &Connection,
-    player_id: i32,
-    result: &TurnResult,
-) -> rusqlite::Result<()> {
-    apply_turn_result_with_repo(&PortImpl, conn, player_id, result)
-}
 
 /// 이동 + 월급만 선반영 (구매 결정 대기 시 사용)
 pub fn pre_apply_move_salary(

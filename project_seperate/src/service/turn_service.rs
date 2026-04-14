@@ -10,7 +10,6 @@ use crate::service::{
     game_end_service::Player as GamePlayer,
     traits::TurnServiceDeps,
 };
-use crate::service::port_impl::PortImpl;
 use crate::service::traits::TurnServiceQueryRepo;
 
 
@@ -81,15 +80,6 @@ pub fn build_landing_context_with_repo<R: TurnServiceQueryRepo>(
     }
 }
 
-pub fn build_landing_context(
-    conn: &Connection,
-    new_position: i32,
-    current_money: i32,
-    salary: i32,
-) -> LandingContext {
-    build_landing_context_with_repo(&crate::service::port_impl::PortImpl, conn, new_position, current_money, salary)
-}
-
 
 pub fn build_turn_result_with_deps<D: TurnServiceDeps>(
     deps: &D,
@@ -139,23 +129,6 @@ pub fn build_turn_result_with_deps<D: TurnServiceDeps>(
     }
 }
 
-/// MoveStep → TurnResult 생성 (통행료/이벤트/None 처리, 구매는 process_decide 경로)
-pub fn build_turn_result(
-    conn: &Connection,
-    move_step: MoveStep,
-    player_id: i32,
-    money_after_salary: i32,
-    tile_price: i32,
-    tile_toll: i32,
-    tile_owner: Option<i32>,
-    tile_type: &str,
-) -> TurnResult {
-    build_turn_result_with_deps(
-        &PortImpl, conn, move_step, player_id,
-        money_after_salary, tile_price, tile_toll, tile_owner, tile_type,
-    )
-}
-
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  플레이어·턴 조회 서비스
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -179,10 +152,6 @@ pub fn get_active_game_players_with_repo<R: TurnServiceQueryRepo>(
         .collect())
 }
 
-pub fn get_active_game_players(conn: &Connection) -> rusqlite::Result<Vec<GamePlayer>> {
-    get_active_game_players_with_repo(&crate::service::port_impl::PortImpl, conn)
-}
-
 
 pub fn resolve_current_player_id_with_repo<R: PlayerStateRepo>(
     repo: &R,
@@ -200,14 +169,6 @@ pub fn resolve_current_player_id_with_repo<R: PlayerStateRepo>(
     Ok(Some(active[normalized].id))
 }
 
-/// 현재 턴 인덱스를 기반으로 실제 턴을 진행할 플레이어의 ID를 반환한다.
-///
-/// DB에서 플레이어 상태를 조회한 뒤, 활성(비파산) 플레이어 수로
-/// 인덱스를 정규화하여 해당 플레이어 ID를 계산한다.
-/// 활성 플레이어가 없으면 `None`을 반환한다.
-pub fn resolve_current_player_id(conn: &Connection, current_turn_index: usize) -> rusqlite::Result<Option<i32>> {
-    resolve_current_player_id_with_repo(&PortImpl, conn, current_turn_index)
-}
 
 // 턴 동안 발생한 행동 종류
 #[derive(Debug, Clone, PartialEq)]

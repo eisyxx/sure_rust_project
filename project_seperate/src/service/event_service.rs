@@ -1,6 +1,5 @@
 use rusqlite::Connection;
 use crate::service::traits::EventServiceRepo;
-use crate::service::port_impl::PortImpl;
 
 
 /// 이벤트 결과
@@ -81,13 +80,4 @@ pub fn handle_event_with_repo<R: EventServiceRepo>(
 
         _ => EventResult::None,
     }
-}
-
-/// 이벤트 처리
-pub fn handle_event(
-    conn: &Connection,
-    player_id: i32,
-    tile_id: i32,
-) -> EventResult {
-    handle_event_with_repo(&PortImpl, conn, player_id, tile_id)
 }
