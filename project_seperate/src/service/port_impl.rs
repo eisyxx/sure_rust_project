@@ -10,7 +10,7 @@ use crate::repository::{
 use crate::service::{
     event_service::{handle_event, EventResult},
     roll_dice_service::roll_dice,
-    traits::{EventServiceRepo, PlayerStateRepo, TurnExecuteRepo, TurnServiceDeps},
+    traits::{EventServiceRepo, PlayerStateRepo, TurnExecuteRepo, TurnServiceDeps, TurnServiceQueryRepo},
 };
 
 pub struct PortImpl;
@@ -30,6 +30,20 @@ impl EventServiceRepo for PortImpl {
 
     fn get_fund_amount(&self, conn: &Connection) -> rusqlite::Result<i32> {
         get_fund_amount(conn)
+    }
+}
+
+impl TurnServiceQueryRepo for PortImpl {
+    fn get_tile_info(&self, conn: &Connection, tile_id: i32) -> rusqlite::Result<(i32, i32, Option<i32>, String)> {
+        crate::repository::tile_repo::get_tile_info(conn, tile_id)
+    }
+
+    fn get_owner(&self, conn: &Connection, tile_id: i32) -> rusqlite::Result<Option<i32>> {
+        crate::repository::property_repo::get_owner(conn, tile_id)
+    }
+
+    fn get_all_players(&self, conn: &Connection) -> rusqlite::Result<Vec<crate::repository::player_repo::PlayerRow>> {
+        crate::repository::player_repo::get_all_players(conn)
     }
 }
 

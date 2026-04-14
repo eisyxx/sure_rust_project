@@ -12,6 +12,12 @@ pub trait EventServiceRepo {
     fn get_fund_amount(&self, conn: &Connection) -> rusqlite::Result<i32>;
 }
 
+pub trait TurnServiceQueryRepo {
+    fn get_tile_info(&self, conn: &Connection, tile_id: i32) -> rusqlite::Result<(i32, i32, Option<i32>, String)>;
+    fn get_owner(&self, conn: &Connection, tile_id: i32) -> rusqlite::Result<Option<i32>>;
+    fn get_all_players(&self, conn: &Connection) -> rusqlite::Result<Vec<crate::repository::player_repo::PlayerRow>>;
+}
+
 pub trait TurnServiceDeps {
     fn roll_dice(&self) -> i32;
     fn handle_event(&self, conn: &Connection, player_id: i32, tile_id: i32) -> EventResult;

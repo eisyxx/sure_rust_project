@@ -1,20 +1,18 @@
 use rusqlite::Connection;
 
-use crate::repository::player_repo::{
-    get_all_players, PlayerState,
-};
-use crate::repository::{property_repo::get_owner, tile_repo::get_tile_info};
+use crate::repository::player_repo::{PlayerState};
 use crate::service::{
     movement_service::move_player,
     salary_service::calculate_salary,
     buy_property_service::{decide_buy_property, BuyResult},
     traits::PlayerStateRepo,
-    roll_dice_service::roll_dice,
-    event_service::{handle_event, EventResult},
+    event_service::{EventResult},
     game_end_service::Player as GamePlayer,
     traits::TurnServiceDeps,
 };
 use crate::service::port_impl::PortImpl;
+use crate::service::traits::TurnServiceQueryRepo;
+
 
 
 // 한 턴 진행 결과 데이터
@@ -63,15 +61,16 @@ pub fn roll_and_move_with_deps<D: TurnServiceDeps>(
 }
 
 /// 도착 타일 정보와 소유자 조회 + 월급 반영 후 잔액 계산을 한 번에 수행한다.
-pub fn build_landing_context(
+pub fn build_landing_context_with_repo<R: TurnServiceQueryRepo>(
+    repo: &R,
     conn: &Connection,
     new_position: i32,
     current_money: i32,
     salary: i32,
 ) -> LandingContext {
     let (tile_price, tile_toll, _, tile_type) =
-        get_tile_info(conn, new_position).unwrap_or((0, 0, None, String::from("unknown")));
-    let tile_owner = get_owner(conn, new_position).unwrap_or(None);
+        repo.get_tile_info(conn, new_position).unwrap_or((0, 0, None, String::from("unknown")));
+    let tile_owner = repo.get_owner(conn, new_position).unwrap_or(None);
 
     LandingContext {
         tile_price,
@@ -81,6 +80,16 @@ pub fn build_landing_context(
         money_after_salary: current_money + salary,
     }
 }
+
+pub fn build_landing_context(
+    conn: &Connection,
+    new_position: i32,
+    current_money: i32,
+    salary: i32,
+) -> LandingContext {
+    build_landing_context_with_repo(&crate::service::port_impl::PortImpl, conn, new_position, current_money, salary)
+}
+
 
 pub fn build_turn_result_with_deps<D: TurnServiceDeps>(
     deps: &D,
@@ -152,8 +161,11 @@ pub fn build_turn_result(
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 /// DB에서 파산하지 않은 활성 플레이어를 `GamePlayer` 형태로 반환한다.
-pub fn get_active_game_players(conn: &Connection) -> rusqlite::Result<Vec<GamePlayer>> {
-    let rows = get_all_players(conn)?;
+pub fn get_active_game_players_with_repo<R: TurnServiceQueryRepo>(
+    repo: &R,
+    conn: &Connection,
+) -> rusqlite::Result<Vec<GamePlayer>> {
+    let rows = repo.get_all_players(conn)?;
     Ok(rows
         .into_iter()
         .filter(|r| !r.is_bankrupt)
@@ -165,6 +177,10 @@ pub fn get_active_game_players(conn: &Connection) -> rusqlite::Result<Vec<GamePl
             is_bankrupt: r.is_bankrupt,
         })
         .collect())
+}
+
+pub fn get_active_game_players(conn: &Connection) -> rusqlite::Result<Vec<GamePlayer>> {
+    get_active_game_players_with_repo(&crate::service::port_impl::PortImpl, conn)
 }
 
 
