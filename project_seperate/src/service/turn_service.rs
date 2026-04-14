@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 use crate::repository::player_repo::{
-    get_all_players, get_player_states, PlayerState,
+    get_all_players, PlayerState,
 };
 use crate::repository::{property_repo::get_owner, tile_repo::get_tile_info};
 use crate::service::{
@@ -14,6 +14,8 @@ use crate::service::{
     game_end_service::Player as GamePlayer,
     traits::TurnServiceDeps,
 };
+use crate::service::port_impl::PortImpl;
+
 
 // 한 턴 진행 결과 데이터
 #[derive(Clone, Debug)]
@@ -42,16 +44,6 @@ pub struct LandingContext {
     pub money_after_salary: i32,
 }
 
-pub struct TurnServiceDepsImpl;
-
-impl TurnServiceDeps for TurnServiceDepsImpl {
-    fn roll_dice(&self) -> i32 {
-        roll_dice()
-    }
-    fn handle_event(&self, conn: &Connection, player_id: i32, tile_id: i32) -> EventResult {
-        handle_event(conn, player_id, tile_id)
-    }
-}
 
 pub fn roll_and_move_with_deps<D: TurnServiceDeps>(
     deps: &D,
@@ -150,7 +142,7 @@ pub fn build_turn_result(
     tile_type: &str,
 ) -> TurnResult {
     build_turn_result_with_deps(
-        &TurnServiceDepsImpl, conn, move_step, player_id,
+        &PortImpl, conn, move_step, player_id,
         money_after_salary, tile_price, tile_toll, tile_owner, tile_type,
     )
 }
@@ -175,13 +167,6 @@ pub fn get_active_game_players(conn: &Connection) -> rusqlite::Result<Vec<GamePl
         .collect())
 }
 
-struct PlayerStateRepoImpl;
-
-impl PlayerStateRepo for PlayerStateRepoImpl {
-    fn get_player_states(&self, conn: &Connection) -> rusqlite::Result<Vec<PlayerState>> {
-        get_player_states(conn)
-    }
-}
 
 pub fn resolve_current_player_id_with_repo<R: PlayerStateRepo>(
     repo: &R,
@@ -205,7 +190,7 @@ pub fn resolve_current_player_id_with_repo<R: PlayerStateRepo>(
 /// 인덱스를 정규화하여 해당 플레이어 ID를 계산한다.
 /// 활성 플레이어가 없으면 `None`을 반환한다.
 pub fn resolve_current_player_id(conn: &Connection, current_turn_index: usize) -> rusqlite::Result<Option<i32>> {
-    resolve_current_player_id_with_repo(&PlayerStateRepoImpl, conn, current_turn_index)
+    resolve_current_player_id_with_repo(&PortImpl, conn, current_turn_index)
 }
 
 // 턴 동안 발생한 행동 종류

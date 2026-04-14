@@ -1,11 +1,7 @@
 use rusqlite::Connection;
-
-use crate::repository::{
-    event_repo::{get_event_info, get_fund_amount},
-    player_repo::get_player_money,
-    property_repo::get_player_total_property_price,
-};
 use crate::service::traits::EventServiceRepo;
+use crate::service::port_impl::PortImpl;
+
 
 /// 이벤트 결과
 #[derive(Debug, PartialEq)]
@@ -18,26 +14,6 @@ pub enum EventResult {
     FundReceive { amount: i32 },
     FundReceiveEmpty,
     None,
-}
-
-pub struct EventServiceRepository;
-
-impl EventServiceRepo for EventServiceRepository {
-    fn get_event_info(&self, conn: &Connection, tile_id: i32) -> rusqlite::Result<(String, i32)> {
-        get_event_info(conn, tile_id)
-    }
-
-    fn get_player_money(&self, conn: &Connection, player_id: i32) -> rusqlite::Result<i32> {
-        get_player_money(conn, player_id)
-    }
-
-    fn get_player_total_property_price(&self, conn: &Connection, player_id: i32) -> rusqlite::Result<i32> {
-        get_player_total_property_price(conn, player_id)
-    }
-
-    fn get_fund_amount(&self, conn: &Connection) -> rusqlite::Result<i32> {
-        get_fund_amount(conn)
-    }
 }
 
 pub fn handle_event_with_repo<R: EventServiceRepo>(
@@ -113,6 +89,5 @@ pub fn handle_event(
     player_id: i32,
     tile_id: i32,
 ) -> EventResult {
-    let repo = EventServiceRepository;
-    handle_event_with_repo(&repo, conn, player_id, tile_id)
+    handle_event_with_repo(&PortImpl, conn, player_id, tile_id)
 }

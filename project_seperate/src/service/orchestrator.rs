@@ -14,8 +14,9 @@ use crate::service::game_end_service::{evaluate_and_apply_game_end, Player as Ga
 use crate::service::turn_execute_service::{apply_turn_result, pre_apply_move_salary, apply_purchase};
 use crate::service::turn_service::{
     build_landing_context, build_turn_result, get_active_game_players,
-    resolve_current_player_id, TurnAction, TurnServiceDepsImpl, roll_and_move_with_deps, TurnResult,
+    resolve_current_player_id, TurnAction, roll_and_move_with_deps, TurnResult,
 };
+use crate::service::port_impl::PortImpl;
 use crate::repository::init::init_db;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -208,7 +209,7 @@ pub fn process_turn(
     session: &mut SessionState,
 ) -> rusqlite::Result<TurnOutcome> {
     let repo = TurnRepoImpl;
-    let deps = TurnServiceDepsImpl;
+    let deps = PortImpl;
     process_turn_with_repo(&repo, &deps, conn, session)
 }
 
