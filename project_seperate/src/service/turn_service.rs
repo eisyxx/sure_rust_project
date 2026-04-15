@@ -1,19 +1,18 @@
 use rusqlite::Connection;
 
-use crate::repository::player_repo::{
-    get_all_players, get_player_states, PlayerState,
-};
-use crate::repository::{property_repo::get_owner, tile_repo::get_tile_info};
+use crate::repository::player_repo::{PlayerState};
 use crate::service::{
     movement_service::move_player,
     salary_service::calculate_salary,
     buy_property_service::{decide_buy_property, BuyResult},
     traits::PlayerStateRepo,
-    roll_dice_service::roll_dice,
-    event_service::{handle_event, EventResult},
+    event_service::{EventResult},
     game_end_service::Player as GamePlayer,
     traits::TurnServiceDeps,
 };
+use crate::service::traits::TurnServiceQueryRepo;
+
+
 
 // 한 턴 진행 결과 데이터
 #[derive(Clone, Debug)]
@@ -42,16 +41,6 @@ pub struct LandingContext {
     pub money_after_salary: i32,
 }
 
-pub struct TurnServiceDepsImpl;
-
-impl TurnServiceDeps for TurnServiceDepsImpl {
-    fn roll_dice(&self) -> i32 {
-        roll_dice()
-    }
-    fn handle_event(&self, conn: &Connection, player_id: i32, tile_id: i32) -> EventResult {
-        handle_event(conn, player_id, tile_id)
-    }
-}
 
 pub fn roll_and_move_with_deps<D: TurnServiceDeps>(
     deps: &D,
@@ -71,15 +60,16 @@ pub fn roll_and_move_with_deps<D: TurnServiceDeps>(
 }
 
 /// 도착 타일 정보와 소유자 조회 + 월급 반영 후 잔액 계산을 한 번에 수행한다.
-pub fn build_landing_context(
+pub fn build_landing_context_with_repo<R: TurnServiceQueryRepo>(
+    repo: &R,
     conn: &Connection,
     new_position: i32,
     current_money: i32,
     salary: i32,
 ) -> LandingContext {
     let (tile_price, tile_toll, _, tile_type) =
-        get_tile_info(conn, new_position).unwrap_or((0, 0, None, String::from("unknown")));
-    let tile_owner = get_owner(conn, new_position).unwrap_or(None);
+        repo.get_tile_info(conn, new_position).unwrap_or((0, 0, None, String::from("unknown")));
+    let tile_owner = repo.get_owner(conn, new_position).unwrap_or(None);
 
     LandingContext {
         tile_price,
@@ -89,6 +79,7 @@ pub fn build_landing_context(
         money_after_salary: current_money + salary,
     }
 }
+
 
 pub fn build_turn_result_with_deps<D: TurnServiceDeps>(
     deps: &D,
@@ -138,30 +129,16 @@ pub fn build_turn_result_with_deps<D: TurnServiceDeps>(
     }
 }
 
-/// MoveStep → TurnResult 생성 (통행료/이벤트/None 처리, 구매는 process_decide 경로)
-pub fn build_turn_result(
-    conn: &Connection,
-    move_step: MoveStep,
-    player_id: i32,
-    money_after_salary: i32,
-    tile_price: i32,
-    tile_toll: i32,
-    tile_owner: Option<i32>,
-    tile_type: &str,
-) -> TurnResult {
-    build_turn_result_with_deps(
-        &TurnServiceDepsImpl, conn, move_step, player_id,
-        money_after_salary, tile_price, tile_toll, tile_owner, tile_type,
-    )
-}
-
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  플레이어·턴 조회 서비스
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 /// DB에서 파산하지 않은 활성 플레이어를 `GamePlayer` 형태로 반환한다.
-pub fn get_active_game_players(conn: &Connection) -> rusqlite::Result<Vec<GamePlayer>> {
-    let rows = get_all_players(conn)?;
+pub fn get_active_game_players_with_repo<R: TurnServiceQueryRepo>(
+    repo: &R,
+    conn: &Connection,
+) -> rusqlite::Result<Vec<GamePlayer>> {
+    let rows = repo.get_all_players(conn)?;
     Ok(rows
         .into_iter()
         .filter(|r| !r.is_bankrupt)
@@ -175,13 +152,6 @@ pub fn get_active_game_players(conn: &Connection) -> rusqlite::Result<Vec<GamePl
         .collect())
 }
 
-struct PlayerStateRepoImpl;
-
-impl PlayerStateRepo for PlayerStateRepoImpl {
-    fn get_player_states(&self, conn: &Connection) -> rusqlite::Result<Vec<PlayerState>> {
-        get_player_states(conn)
-    }
-}
 
 pub fn resolve_current_player_id_with_repo<R: PlayerStateRepo>(
     repo: &R,
@@ -199,14 +169,6 @@ pub fn resolve_current_player_id_with_repo<R: PlayerStateRepo>(
     Ok(Some(active[normalized].id))
 }
 
-/// 현재 턴 인덱스를 기반으로 실제 턴을 진행할 플레이어의 ID를 반환한다.
-///
-/// DB에서 플레이어 상태를 조회한 뒤, 활성(비파산) 플레이어 수로
-/// 인덱스를 정규화하여 해당 플레이어 ID를 계산한다.
-/// 활성 플레이어가 없으면 `None`을 반환한다.
-pub fn resolve_current_player_id(conn: &Connection, current_turn_index: usize) -> rusqlite::Result<Option<i32>> {
-    resolve_current_player_id_with_repo(&PlayerStateRepoImpl, conn, current_turn_index)
-}
 
 // 턴 동안 발생한 행동 종류
 #[derive(Debug, Clone, PartialEq)]

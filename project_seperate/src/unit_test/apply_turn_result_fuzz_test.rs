@@ -8,7 +8,8 @@ mod fuzz_apply_turn_result {
     use proptest::prelude::*;
     use rusqlite::Connection;
 
-    use crate::service::turn_execute_service::apply_turn_result;
+    use crate::service::port_impl::PortImpl;
+    use crate::service::turn_execute_service::apply_turn_result_with_repo;
     use crate::service::turn_service::{TurnResult, TurnAction};
 
     // 간단한 DB 초기화
@@ -87,7 +88,7 @@ mod fuzz_apply_turn_result {
                 action,
             };
 
-            let _ = apply_turn_result(&conn, 1, &result);
+            let _ = apply_turn_result_with_repo(&PortImpl, &conn, 1, &result);
 
             // DB 상태 확인
             let (money, is_bankrupt): (i32, i32) =
