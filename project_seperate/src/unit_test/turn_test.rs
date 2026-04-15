@@ -359,4 +359,37 @@ mod tests {
         assert!(players.iter().all(|p| p.id != 1));
     }
 
+    // ── is_bankrupt ─────────────────
+    // is_bankrupt() == true 검증
+    #[test]
+    fn test_is_bankrupt_true_cases() {
+        let cases = vec![
+            TurnAction::Bankrupt { owner_id: 1, paid: 100 },
+            TurnAction::EventWelfareFundBankrupt { paid: 50 },
+            TurnAction::EstateTaxBankrupt { paid: 30 },
+        ];
+
+        for action in cases {
+            assert!(action.is_bankrupt());
+        }
+    }
+
+    // is_bankrupt() == false 검증
+    #[test]
+    fn test_is_bankrupt_false_cases() {
+        let cases = vec![
+            TurnAction::None,
+            TurnAction::PayToll { owner_id: 1, amount: 100 },
+            TurnAction::EventWelfareFund { amount: 200 },
+            TurnAction::EventFundReceive { amount: 300 },
+            TurnAction::FundReceiveEmpty,
+            TurnAction::EstateTax { amount: 400 },
+            TurnAction::EstateTaxSkipped,
+        ];
+
+        for action in cases {
+            assert!(!action.is_bankrupt());
+        }
+    }
+
 }
