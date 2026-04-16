@@ -8,9 +8,8 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::service::game_end_service::{check_game_end, apply_rewards, evaluate_and_apply_game_end, GameResult, Player};
-    use rusqlite::{Connection, params};
-    use std::cell::Cell;
+    use crate::service::game_end_service::{check_game_end, apply_rewards, evaluate_and_apply_game_end, Player};
+    use rusqlite::{Connection};
 
     // 플레이어 0명 상태
     #[test]
