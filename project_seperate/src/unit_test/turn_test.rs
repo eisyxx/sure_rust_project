@@ -42,6 +42,72 @@ mod tests {
         }
     }
 
+    // ? 처리를 위한 Mock
+    struct MockRepo {
+        fail_all_players: bool,
+        fail_player_states: bool,
+    }
+    impl TurnServiceQueryRepo for MockRepo {
+        fn get_tile_info(
+            &self,
+            _conn: &Connection,
+            _tile_id: i32,
+        ) -> rusqlite::Result<(i32, i32, Option<i32>, String)> {
+            unimplemented!()
+        }
+
+        fn get_owner(
+            &self,
+            _conn: &Connection,
+            _tile_id: i32,
+        ) -> rusqlite::Result<Option<i32>> {
+            unimplemented!()
+        }
+
+        fn get_all_players(
+            &self,
+            _conn: &Connection,
+        ) -> rusqlite::Result<Vec<crate::repository::player_repo::PlayerRow>> {
+            if self.fail_all_players {
+                return Err(rusqlite::Error::InvalidQuery);
+            }
+            Ok(vec![])
+        }
+    }
+    impl PlayerStateRepo for MockRepo {
+        fn get_player_states(
+            &self,
+            _conn: &Connection,
+        ) -> rusqlite::Result<Vec<PlayerState>> {
+            if self.fail_player_states {
+                return Err(rusqlite::Error::InvalidQuery);
+            }
+            Ok(vec![])
+        }
+    }
+    impl MockRepo {
+        fn new() -> Self {
+            Self {
+                fail_all_players: false,
+                fail_player_states: false,
+            }
+        }
+
+        fn fail_all_players() -> Self {
+            Self {
+                fail_all_players: true,
+                fail_player_states: false,
+            }
+        }
+
+        fn fail_player_states() -> Self {
+            Self {
+                fail_all_players: false,
+                fail_player_states: true,
+            }
+        }
+    }
+
     // 인메모리 DB
     fn dummy_conn() -> Connection {
         Connection::open_in_memory().unwrap()
@@ -392,4 +458,25 @@ mod tests {
         }
     }
 
+    // ── ? 커버 ─────────────────
+    // get_active_game_players_with_repo -> get_all_players
+    #[test]
+    fn test_get_active_game_players_error() {
+        let conn = Connection::open_in_memory().unwrap();
+        let repo = MockRepo::fail_all_players();
+        let result = get_active_game_players_with_repo(&repo, &conn);
+
+        assert!(result.is_err());
+    }
+
+
+    // resolve_current_player_id_with_repo -> get_player_states
+    #[test]
+    fn test_current_player_id_error() {
+        let conn = Connection::open_in_memory().unwrap();
+        let repo = MockRepo::fail_player_states();
+        let result = resolve_current_player_id_with_repo(&repo, &conn, 0);
+
+        assert!(result.is_err());
+    }
 }

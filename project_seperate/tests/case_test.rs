@@ -5,6 +5,7 @@ mod integration_case_tests {
     use project::service::orchestrator::*;
     use project::service::event_service::EventResult;
     use project::service::traits::TurnServiceDeps;
+    use project::service::port_impl::PortImpl;
 
     #[derive(Debug)]
     struct ExpectedTurnOutcome {
@@ -23,25 +24,20 @@ mod integration_case_tests {
         winner_id: Option<i32>,
     }
     struct MockDeps {
-        dice: i32,
-        event_result: EventResult,
+        dice: i32
     }
 
     impl TurnServiceDeps for MockDeps {
         fn roll_dice(&self) -> i32 {
             self.dice
         }
-        fn handle_event(&self, _conn: &Connection, _player_id: i32, _tile_id: i32) -> EventResult {
-            match &self.event_result {
-                EventResult::WelfareFund { amount } => EventResult::WelfareFund { amount: *amount },
-                EventResult::WelfareFundBankrupt { paid } => EventResult::WelfareFundBankrupt { paid: *paid },
-                EventResult::EstateTax { amount } => EventResult::EstateTax { amount: *amount },
-                EventResult::EstateTaxBankrupt { paid } => EventResult::EstateTaxBankrupt { paid: *paid },
-                EventResult::EstateTaxSkipped => EventResult::EstateTaxSkipped,
-                EventResult::FundReceive { amount } => EventResult::FundReceive { amount: *amount },
-                EventResult::FundReceiveEmpty => EventResult::FundReceiveEmpty,
-                EventResult::None => EventResult::None,
-            }
+        fn handle_event(
+            &self,
+            conn: &Connection,
+            player_id: i32,
+            tile_id: i32,
+        ) -> EventResult {
+            PortImpl.handle_event(conn, player_id, tile_id)
         }
     }
 
@@ -89,8 +85,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 3,
-                event_result: EventResult::None,
+                dice: 3
             },
             &conn,
             &mut session,
@@ -144,8 +139,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 3,
-                event_result: EventResult::None,
+                dice: 3
             },
             &conn,
             &mut session,
@@ -199,8 +193,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 3,
-                event_result: EventResult::None,
+                dice: 3
             },
             &conn,
             &mut session,
@@ -261,8 +254,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 3,
-                event_result: EventResult::None,
+                dice: 3
             },
             &conn,
             &mut session,
@@ -307,8 +299,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 5,
-                event_result: EventResult::None,
+                dice: 5
             },
             &conn,
             &mut session,
@@ -356,8 +347,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 3,
-                event_result: EventResult::None,
+                dice: 3
             },
             &conn,
             &mut session,
@@ -403,8 +393,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 3,
-                event_result: EventResult::None,
+                dice: 3
             },
             &conn,
             &mut session,
@@ -455,8 +444,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 4,
-                event_result: EventResult::WelfareFund { amount: 10 },
+                dice: 4
             },
             &conn,
             &mut session,
@@ -499,8 +487,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 4,
-                event_result: EventResult::WelfareFundBankrupt { paid: 3 },
+                dice: 4
             },
             &conn,
             &mut session,
@@ -545,8 +532,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 4,
-                event_result: EventResult::FundReceive { amount: 30 },
+                dice: 4
             },
             &conn,
             &mut session,
@@ -589,8 +575,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 4,
-                event_result: EventResult::FundReceiveEmpty,
+                dice: 4
             },
             &conn,
             &mut session,
@@ -638,8 +623,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 4,
-                event_result: EventResult::EstateTax { amount: 30 },
+                dice: 4
             },
             &conn,
             &mut session,
@@ -680,8 +664,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 4,
-                event_result: EventResult::EstateTaxBankrupt { paid: 10 },
+                dice: 4
             },
             &conn,
             &mut session,
@@ -725,8 +708,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 4,
-                event_result: EventResult::EstateTaxSkipped,
+                dice: 4
             },
             &conn,
             &mut session,
@@ -774,8 +756,7 @@ mod integration_case_tests {
         let result = process_turn_with_repo(
             &repo,
             &MockDeps { 
-                dice: 3,
-                event_result: EventResult::None,
+                dice: 3
             },
             &conn,
             &mut session,
