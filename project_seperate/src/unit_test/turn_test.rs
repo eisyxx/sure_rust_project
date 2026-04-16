@@ -1,13 +1,19 @@
 #[cfg(test)]
 mod tests {
     use rusqlite::Connection;
+
     use crate::service::event_service::EventResult;
     use crate::service::turn_service::{
         build_turn_result_with_deps, roll_and_move_with_deps,
         resolve_current_player_id_with_repo,
+        build_landing_context_with_repo, get_active_game_players_with_repo,
         MoveStep, TurnAction,
     };
-    use crate::service::traits::{TurnServiceDeps, PlayerStateRepo};
+    use crate::service::traits::{TurnServiceDeps, PlayerStateRepo, TurnServiceQueryRepo};
+    use crate::service::port_impl::PortImpl;
+
+    use crate::repository::init::init_db;
+    use crate::repository::player_repo::PlayerRow;
     use crate::repository::player_repo::PlayerState;
 
     // ── Mock ──────────────────────────────────────────────
@@ -300,4 +306,90 @@ mod tests {
         assert_eq!(resolve_current_player_id_with_repo(&repo, &dummy_conn(), 0).unwrap(), Some(2));
         assert_eq!(resolve_current_player_id_with_repo(&repo, &dummy_conn(), 1).unwrap(), Some(3));
     }
+
+    // ── build_landing_context_with_repo ──────────────────
+    struct MockTurnServiceQueryRepo {
+        tile_info: (i32, i32, Option<i32>, String),
+        owner: Option<i32>,
+    }
+
+    impl TurnServiceQueryRepo for MockTurnServiceQueryRepo {
+        fn get_tile_info(&self, _conn: &Connection, _tile_id: i32) -> rusqlite::Result<(i32, i32, Option<i32>, String)> {
+            Ok(self.tile_info.clone())
+        }
+
+        fn get_owner(&self, _conn: &Connection, _tile_id: i32) -> rusqlite::Result<Option<i32>> {
+            Ok(self.owner)
+        }
+
+        fn get_all_players(&self, _conn: &Connection) -> rusqlite::Result<Vec<PlayerRow>> {
+            Ok(vec![])
+        }
+    }
+
+    #[test]
+    fn landing_context_with_repo_builds_expected_values() {
+        let repo = MockTurnServiceQueryRepo {
+            tile_info: (120, 15, None, "land".to_string()),
+            owner: Some(2),
+        };
+
+        let ctx = build_landing_context_with_repo(&repo, &dummy_conn(), 7, 80, 20);
+
+        assert_eq!(ctx.tile_price, 120);
+        assert_eq!(ctx.tile_toll, 15);
+        assert_eq!(ctx.tile_owner, Some(2));
+        assert_eq!(ctx.tile_type, "land");
+        assert_eq!(ctx.money_after_salary, 100);
+    }
+
+    // ── get_active_game_players_with_repo ────────────────
+    #[test]
+    fn get_active_game_players_with_repo_filters_bankrupt_players() {
+        let conn = dummy_conn();
+        init_db::init_db(&conn).unwrap();
+
+        // 한 명을 파산 처리해서 필터링 동작 확인
+        conn.execute("UPDATE players SET is_bankrupt = 1 WHERE id = 1", []).unwrap();
+
+        let players = get_active_game_players_with_repo(&PortImpl, &conn).unwrap();
+
+        assert!(!players.is_empty());
+        assert!(players.iter().all(|p| !p.is_bankrupt));
+        assert!(players.iter().all(|p| p.id != 1));
+    }
+
+    // ── is_bankrupt ─────────────────
+    // is_bankrupt() == true 검증
+    #[test]
+    fn test_is_bankrupt_true_cases() {
+        let cases = vec![
+            TurnAction::Bankrupt { owner_id: 1, paid: 100 },
+            TurnAction::EventWelfareFundBankrupt { paid: 50 },
+            TurnAction::EstateTaxBankrupt { paid: 30 },
+        ];
+
+        for action in cases {
+            assert!(action.is_bankrupt());
+        }
+    }
+
+    // is_bankrupt() == false 검증
+    #[test]
+    fn test_is_bankrupt_false_cases() {
+        let cases = vec![
+            TurnAction::None,
+            TurnAction::PayToll { owner_id: 1, amount: 100 },
+            TurnAction::EventWelfareFund { amount: 200 },
+            TurnAction::EventFundReceive { amount: 300 },
+            TurnAction::FundReceiveEmpty,
+            TurnAction::EstateTax { amount: 400 },
+            TurnAction::EstateTaxSkipped,
+        ];
+
+        for action in cases {
+            assert!(!action.is_bankrupt());
+        }
+    }
+
 }

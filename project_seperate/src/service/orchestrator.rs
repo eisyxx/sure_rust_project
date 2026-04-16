@@ -11,12 +11,14 @@ use crate::service::traits::TurnRepo;
 
 use crate::service::buy_property_service::{is_purchasable_tile, decide_buy_property, BuyResult};
 use crate::service::game_end_service::{evaluate_and_apply_game_end, Player as GamePlayer};
-use crate::service::turn_execute_service::{apply_turn_result, pre_apply_move_salary, apply_purchase};
-use crate::service::turn_service::{
-    build_landing_context, build_turn_result, get_active_game_players,
-    resolve_current_player_id, TurnAction, TurnServiceDepsImpl, roll_and_move_with_deps, TurnResult,
-};
 use crate::repository::init::init_db;
+
+use crate::service::port_impl::PortImpl;
+use crate::service::turn_execute_service::{apply_turn_result_with_repo, pre_apply_move_salary, apply_purchase};
+use crate::service::turn_service::{
+    build_landing_context_with_repo, build_turn_result_with_deps, get_active_game_players_with_repo,
+    resolve_current_player_id_with_repo, TurnAction, roll_and_move_with_deps, TurnResult,
+};
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  세션 및 대기 상태 구조체
@@ -139,7 +141,7 @@ pub struct TurnRepoImpl;
 
 impl TurnRepo for TurnRepoImpl {
     fn get_active_game_players(&self, conn: &Connection) -> rusqlite::Result<Vec<GamePlayer>> {
-        get_active_game_players(conn)
+        get_active_game_players_with_repo(&PortImpl, conn)
     }
     fn get_player_states(&self, conn: &Connection) -> rusqlite::Result<Vec<PlayerState>> {
         get_player_states(conn)
@@ -148,10 +150,10 @@ impl TurnRepo for TurnRepoImpl {
         get_owned_tiles(conn)
     }
     fn resolve_current_player_id(&self, conn: &Connection, idx: usize) -> rusqlite::Result<Option<i32>> {
-        resolve_current_player_id(conn, idx)
+        resolve_current_player_id_with_repo(&PortImpl, conn, idx)
     }
     fn apply_turn_result(&self, conn: &Connection, player_id: i32, result: &TurnResult) -> rusqlite::Result<()> {
-        apply_turn_result(conn, player_id, result)
+        apply_turn_result_with_repo(&PortImpl, conn, player_id, result)
     }
     fn pre_apply_move_salary(&self, conn: &Connection, player_id: i32, pos: i32, lap: i32, salary: i32) -> rusqlite::Result<()> {
         pre_apply_move_salary(conn, player_id, pos, lap, salary)
@@ -185,7 +187,7 @@ pub fn init_session(conn: &Connection) -> rusqlite::Result<SessionState> {
 /// 현재 게임 상태 조회
 pub fn get_state(conn: &Connection, session: &SessionState) -> rusqlite::Result<StateResult> {
     let players = get_player_states(conn)?; // [DB 읽기] repository 직접 호출
-    let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
+    let current_player_id = resolve_current_player_id_with_repo(&PortImpl, conn, session.current_turn_index)?;
     let tile_owners = get_owned_tiles(conn)?; // [DB 읽기] repository 직접 호출
 
     Ok(StateResult {
@@ -208,7 +210,7 @@ pub fn process_turn(
     session: &mut SessionState,
 ) -> rusqlite::Result<TurnOutcome> {
     let repo = TurnRepoImpl;
-    let deps = TurnServiceDepsImpl;
+    let deps = PortImpl;
     process_turn_with_repo(&repo, &deps, conn, session)
 }
 
@@ -246,7 +248,8 @@ pub fn process_turn_with_repo<R: TurnRepo, D: TurnServiceDeps>(repo: &R, deps: &
 
     let move_step = roll_and_move_with_deps(deps, current_player.position, current_player.lap, 24);
 
-    let landing = build_landing_context(
+    let landing = build_landing_context_with_repo(
+        &PortImpl,
         conn,
         move_step.new_position,
         current_player.money,
@@ -302,7 +305,8 @@ pub fn process_turn_with_repo<R: TurnRepo, D: TurnServiceDeps>(repo: &R, deps: &
     let old_lap = current_player.lap;
     let player_id = current_player.id;
 
-    let turn_result = build_turn_result(
+    let turn_result = build_turn_result_with_deps(
+        deps,
         conn,
         move_step,
         player_id,
@@ -319,7 +323,7 @@ pub fn process_turn_with_repo<R: TurnRepo, D: TurnServiceDeps>(repo: &R, deps: &
 
     let players_after = get_player_states(conn)?; // [DB 읽기] repository 직접 호출
     let tile_owners = get_owned_tiles(conn)?; // [DB 읽기] repository 직접 호출
-    let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
+    let current_player_id = resolve_current_player_id_with_repo(&PortImpl, conn, session.current_turn_index)?;
 
     let (action_type, action_amount, owner_id) = map_action(&turn_result.action);
 
@@ -386,7 +390,7 @@ pub fn process_decide_with_repo<R: TurnRepo>(
 
     let players_after = get_player_states(conn)?; // [DB 읽기] repository 직접 호출
     let tile_owners = get_owned_tiles(conn)?; // [DB 읽기] repository 직접 호출
-    let current_player_id = resolve_current_player_id(conn, session.current_turn_index)?;
+    let current_player_id = resolve_current_player_id_with_repo(&PortImpl, conn, session.current_turn_index)?;
 
     Ok(TurnOutcome {
         player_id: pending.player_id,
